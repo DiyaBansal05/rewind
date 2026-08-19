@@ -12,6 +12,25 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
 
 server:
   port: 8080
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-key-change-me-before-any-real-deployment-32bytes+}
+    admin-expiration-minutes: 60
+    student-expiration-days: 30
+  qr:
+    secret: ${QR_SECRET:dev-only-qr-secret-change-me-before-any-real-deployment}
+  access:
+    secret: ${ACCESS_SECRET:dev-only-access-secret-change-me-before-any-real-deployment}
+    expiration-hours: 48
+  whatsapp:
+    enabled: ${WHATSAPP_ENABLED:false}
+    api-base-url: ${WHATSAPP_API_BASE_URL:https://graph.facebook.com/v21.0}
+    phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+    access-token: ${WHATSAPP_ACCESS_TOKEN:}
+    admin-recipient-number: ${WHATSAPP_ADMIN_NUMBER:}
