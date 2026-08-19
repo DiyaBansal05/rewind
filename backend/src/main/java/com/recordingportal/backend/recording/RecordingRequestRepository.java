@@ -20,4 +20,6 @@ public interface RecordingRequestRepository extends JpaRepository<RecordingReque
 
     @Query("select r from RecordingRequest r join fetch r.batch join fetch r.student where r.id = :id")
     Optional<RecordingRequest> findWithDetailsById(UUID id);
+
+    long countByStudentId(UUID studentId);
 }

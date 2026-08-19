@@ -54,3 +54,25 @@ export interface NotificationItem {
   message: string
   sentAt: string
 }
+
+export interface BatchEnrollment {
+  batchId: string
+  batchName: string
+}
+
+export interface StudentSummary {
+  id: string
+  name: string
+  phoneNumber: string
+  batches: BatchEnrollment[]
+  totalRequests: number
+}
+
+export interface StudentRequestDetail {
+  id: string
+  batchId: string
+  batchName: string
+  classDate: string
+  status: RecordingRequestStatus
+  requestedAt: string
+}
