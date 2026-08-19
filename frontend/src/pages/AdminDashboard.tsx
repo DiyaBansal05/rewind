@@ -25,6 +25,17 @@ export function AdminDashboard() {
   const [students, setStudents] = useState<StudentSummary[]>([])
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null)
   const [studentRequests, setStudentRequests] = useState<StudentRequestDetail[]>([])
+  const [studentSearch, setStudentSearch] = useState('')
+  const [studentBatchFilter, setStudentBatchFilter] = useState('ALL')
+
+  const filteredStudents = students.filter((s) => {
+    const matchesSearch = studentSearch.trim() === ''
+      || s.name.toLowerCase().includes(studentSearch.trim().toLowerCase())
+      || s.phoneNumber.includes(studentSearch.trim())
+    const matchesBatch = studentBatchFilter === 'ALL'
+      || s.batches.some((b) => b.batchId === studentBatchFilter)
+    return matchesSearch && matchesBatch
+  })
 
   function refreshBatches() {
     apiFetch<Batch[]>('/api/admin/batches').then(setBatches).catch(() => {})
@@ -155,11 +166,33 @@ export function AdminDashboard() {
 
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-medium text-slate-900">Students</h2>
+
+          {students.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                type="text" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)}
+                placeholder="Search by name or phone..."
+                className="flex-1 min-w-[10rem] rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+              <select
+                value={studentBatchFilter} onChange={(e) => setStudentBatchFilter(e.target.value)}
+                className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              >
+                <option value="ALL">All batches</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {students.length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No students registered yet.</p>
+          ) : filteredStudents.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No students match your search/filter.</p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-100">
-              {students.map((s) => (
+              {filteredStudents.map((s) => (
                 <li key={s.id} className="py-3">
                   <button onClick={() => toggleStudent(s.id)} className="flex w-full items-center justify-between text-left">
                     <div>
