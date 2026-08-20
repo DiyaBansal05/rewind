@@ -45,3 +45,5 @@ app:
     # existing recordings: refuse to query Zoom for any date further back
     # than this many days, no matter what a caller asks for.
     max-lookback-days: ${ZOOM_MAX_LOOKBACK_DAYS:7}
+  institute:
+    timezone: ${INSTITUTE_TIMEZONE:Asia/Kolkata}

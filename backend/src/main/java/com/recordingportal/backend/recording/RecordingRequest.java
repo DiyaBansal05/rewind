@@ -60,4 +60,6 @@ public class RecordingRequest {
     private Instant accessExpiresAt;
 
     private String zoomRecordingFileId;
+
+    private String zoomMeetingUuid;
 }
