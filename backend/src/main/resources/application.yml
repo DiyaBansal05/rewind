@@ -40,4 +40,8 @@ app:
     client-secret: ${ZOOM_CLIENT_SECRET:}
     oauth-base-url: ${ZOOM_OAUTH_BASE_URL:https://zoom.us}
     api-base-url: ${ZOOM_API_BASE_URL:https://api.zoom.us/v2}
-    user-email: ${ZOOM_USER_EMAIL:}
+    user-email: ${ZOOM_USER_EMAIL:realjava2015@gmail.com}
+    # Safety rail while integrating against a real account with important
+    # existing recordings: refuse to query Zoom for any date further back
+    # than this many days, no matter what a caller asks for.
+    max-lookback-days: ${ZOOM_MAX_LOOKBACK_DAYS:7}
