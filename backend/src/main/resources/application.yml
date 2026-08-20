@@ -34,3 +34,10 @@ app:
     phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
     access-token: ${WHATSAPP_ACCESS_TOKEN:}
     admin-recipient-number: ${WHATSAPP_ADMIN_NUMBER:}
+  zoom:
+    account-id: ${ZOOM_ACCOUNT_ID:}
+    client-id: ${ZOOM_CLIENT_ID:}
+    client-secret: ${ZOOM_CLIENT_SECRET:}
+    oauth-base-url: ${ZOOM_OAUTH_BASE_URL:https://zoom.us}
+    api-base-url: ${ZOOM_API_BASE_URL:https://api.zoom.us/v2}
+    user-email: ${ZOOM_USER_EMAIL:}
