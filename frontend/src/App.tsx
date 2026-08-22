@@ -1,7 +1,10 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Landing } from './pages/Landing'
 import { AdminLogin } from './pages/AdminLogin'
-import { AdminDashboard } from './pages/AdminDashboard'
+import { AdminLayout } from './pages/admin/AdminLayout'
+import { AdminRequestsPage } from './pages/admin/AdminRequestsPage'
+import { AdminBatchesPage } from './pages/admin/AdminBatchesPage'
+import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { StudentLogin } from './pages/StudentLogin'
 import { StudentDashboard } from './pages/StudentDashboard'
 import { Register } from './pages/Register'
@@ -18,10 +21,15 @@ function App() {
           path="/admin"
           element={
             <ProtectedRoute role="ADMIN">
-              <AdminDashboard />
+              <AdminLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<Navigate to="requests" replace />} />
+          <Route path="requests" element={<AdminRequestsPage />} />
+          <Route path="batches" element={<AdminBatchesPage />} />
+          <Route path="students" element={<AdminStudentsPage />} />
+        </Route>
         <Route path="/student/login" element={<StudentLogin />} />
         <Route
           path="/student"

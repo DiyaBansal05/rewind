@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch, clearAuth } from '../api/client'
 import type { EnrolledBatch, NotificationItem, StudentRecordingRequest } from '../api/types'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { RefreshButton } from '../components/RefreshButton'
 
 const STATUS_STYLES: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-700',
@@ -46,21 +48,16 @@ export function StudentDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  function refreshHistory() {
+  function refresh() {
+    apiFetch<EnrolledBatch[]>('/api/student/batches').then((b) => {
+      setBatches(b)
+      setSelectedBatch((prev) => prev || (b.length > 0 ? b[0].batchId : ''))
+    }).catch(() => {})
     apiFetch<StudentRecordingRequest[]>('/api/student/recording-requests').then(setHistory).catch(() => {})
-  }
-  function refreshNotifications() {
     apiFetch<NotificationItem[]>('/api/student/notifications').then(setNotifications).catch(() => {})
   }
 
-  useEffect(() => {
-    apiFetch<EnrolledBatch[]>('/api/student/batches').then((b) => {
-      setBatches(b)
-      if (b.length > 0) setSelectedBatch(b[0].batchId)
-    }).catch(() => {})
-    refreshHistory()
-    refreshNotifications()
-  }, [])
+  useAutoRefresh(refresh)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -72,7 +69,7 @@ export function StudentDashboard() {
         body: JSON.stringify({ batchId: selectedBatch, classDate }),
       })
       setClassDate('')
-      refreshHistory()
+      refresh()
     } catch {
       setError('Could not submit request. Try again.')
     } finally {
@@ -86,15 +83,18 @@ export function StudentDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-2xl">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 md:py-8">
+      <div className="mx-auto max-w-4xl">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-slate-900">My recordings</h1>
-          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
+          <h1 className="text-xl md:text-2xl font-semibold text-slate-900">My recordings</h1>
+          <div className="flex items-center gap-3">
+            <RefreshButton onClick={refresh} />
+            <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
+          </div>
         </div>
 
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-medium text-slate-900">Request a recording</h2>
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+          <h2 className="text-base md:text-lg font-medium text-slate-900">Request a recording</h2>
           {batches.length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">You're not enrolled in any batches yet.</p>
           ) : (
@@ -125,39 +125,41 @@ export function StudentDashboard() {
           {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </section>
 
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-medium text-slate-900">Notifications</h2>
-          {notifications.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">Nothing yet.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {notifications.map((n) => (
-                <li key={n.id} className="break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-                  {renderMessageWithLink(n.message)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+            <h2 className="text-base md:text-lg font-medium text-slate-900">Notifications</h2>
+            {notifications.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">Nothing yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {notifications.map((n) => (
+                  <li key={n.id} className="break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+                    {renderMessageWithLink(n.message)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-medium text-slate-900">Request history</h2>
-          {history.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">No requests yet.</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-slate-100">
-              {history.map((h) => (
-                <li key={h.id} className="flex items-center justify-between py-2.5">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">{h.batchName}</p>
-                    <p className="text-xs text-slate-500">Class on {h.classDate}</p>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[h.status] ?? ''}`}>{h.status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+            <h2 className="text-base md:text-lg font-medium text-slate-900">Request history</h2>
+            {history.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No requests yet.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-slate-100">
+                {history.map((h) => (
+                  <li key={h.id} className="flex items-center justify-between py-2.5">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{h.batchName}</p>
+                      <p className="text-xs text-slate-500">Class on {h.classDate}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[h.status] ?? ''}`}>{h.status}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   )
