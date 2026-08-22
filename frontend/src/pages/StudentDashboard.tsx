@@ -11,6 +11,31 @@ const STATUS_STYLES: Record<string, string> = {
   EXPIRED: 'bg-slate-100 text-slate-600',
 }
 
+/**
+ * Notification messages have an absolute backend URL embedded (see
+ * NotificationServiceImpl on the backend -- it must be absolute, not a
+ * relative /r/{token} path, since the frontend and backend are different
+ * origins in both local dev and production). This splits that out and
+ * renders it as an actual clickable link, opening in a new tab since the
+ * redemption page is a standalone route outside the SPA (same link a
+ * student would get via WhatsApp once that's wired up).
+ */
+function renderMessageWithLink(message: string) {
+  const match = message.match(/(https?:\/\/\S+)/)
+  if (!match) return message
+  const [link] = match
+  const index = match.index ?? 0
+  return (
+    <>
+      {message.slice(0, index)}
+      <a href={link} target="_blank" rel="noreferrer" className="text-slate-900 underline hover:no-underline">
+        {link}
+      </a>
+      {message.slice(index + link.length)}
+    </>
+  )
+}
+
 export function StudentDashboard() {
   const navigate = useNavigate()
   const [batches, setBatches] = useState<EnrolledBatch[]>([])
@@ -107,7 +132,9 @@ export function StudentDashboard() {
           ) : (
             <ul className="mt-3 space-y-2">
               {notifications.map((n) => (
-                <li key={n.id} className="break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{n.message}</li>
+                <li key={n.id} className="break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+                  {renderMessageWithLink(n.message)}
+                </li>
               ))}
             </ul>
           )}

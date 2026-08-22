@@ -19,6 +19,12 @@ server:
   port: 8080
 
 app:
+  # Frontend and backend are separate origins (different ports locally,
+  # different domains -- Render vs Vercel -- in production), so links meant
+  # to be clicked from anywhere (WhatsApp, email, a browser tab on the
+  # frontend) must be absolute, not relative to whatever page happens to be
+  # open when they're clicked.
+  backend-base-url: ${BACKEND_BASE_URL:http://localhost:8080}
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-key-change-me-before-any-real-deployment-32bytes+}
     admin-expiration-minutes: 60

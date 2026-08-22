@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,18 +32,21 @@ public class AdminRecordingController {
     private final AccessTokenService accessTokenService;
     private final NotificationService notificationService;
     private final ZoomRecordingMatcher zoomRecordingMatcher;
+    private final String backendBaseUrl;
 
     public AdminRecordingController(
             RecordingRequestRepository recordingRequestRepository,
             AdminRepository adminRepository,
             AccessTokenService accessTokenService,
             NotificationService notificationService,
-            ZoomRecordingMatcher zoomRecordingMatcher) {
+            ZoomRecordingMatcher zoomRecordingMatcher,
+            @Value("${app.backend-base-url}") String backendBaseUrl) {
         this.recordingRequestRepository = recordingRequestRepository;
         this.adminRepository = adminRepository;
         this.accessTokenService = accessTokenService;
         this.notificationService = notificationService;
         this.zoomRecordingMatcher = zoomRecordingMatcher;
+        this.backendBaseUrl = backendBaseUrl;
     }
 
     public record QueueItem(
@@ -127,7 +131,7 @@ public class AdminRecordingController {
         request.setZoomMeetingUuid(chosen.meetingUuid());
         recordingRequestRepository.save(request);
 
-        String accessUrl = "/r/" + issued.rawToken();
+        String accessUrl = backendBaseUrl + "/r/" + issued.rawToken();
         notificationService.notifyStudentRecordingApproved(request, accessUrl);
 
         return ResponseEntity.ok(QueueItem.from(request));
