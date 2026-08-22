@@ -2,9 +2,9 @@ spring:
   application:
     name: backend
   datasource:
-    url: jdbc:postgresql://localhost:5432/recordingportal
-    username: recordingportal
-    password: recordingportal
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/recordingportal}
+    username: ${SPRING_DATASOURCE_USERNAME:recordingportal}
+    password: ${SPRING_DATASOURCE_PASSWORD:recordingportal}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -25,6 +25,11 @@ app:
   # frontend) must be absolute, not relative to whatever page happens to be
   # open when they're clicked.
   backend-base-url: ${BACKEND_BASE_URL:http://localhost:8080}
+  # Comma-separated list of origins allowed to call /api/** via CORS -- the
+  # deployed frontend's real domain gets added here once it exists, plus
+  # local dev origins so nothing breaks locally.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-key-change-me-before-any-real-deployment-32bytes+}
     admin-expiration-minutes: 60
