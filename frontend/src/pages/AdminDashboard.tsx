@@ -49,10 +49,31 @@ export function AdminDashboard() {
     apiFetch<StudentSummary[]>('/api/admin/students').then(setStudents).catch(() => {})
   }
 
-  useEffect(() => {
+  function refreshAll() {
     refreshBatches()
     refreshQueue()
     refreshStudents()
+  }
+
+  useEffect(() => {
+    refreshAll()
+
+    // Registrations and requests often happen in a different tab/device
+    // (a student scanning a QR, or submitting a request) -- refetch
+    // whenever the admin comes back to this tab rather than only once on
+    // load, so the dashboard doesn't silently go stale.
+    function onFocus() {
+      refreshAll()
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') refreshAll()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
 
   async function toggleStudent(studentId: string) {
@@ -120,7 +141,10 @@ export function AdminDashboard() {
       <div className="mx-auto max-w-4xl">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-slate-900">Admin dashboard</h1>
-          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
+          <div className="flex items-center gap-4">
+            <button onClick={refreshAll} className="text-sm text-slate-500 hover:text-slate-800">Refresh</button>
+            <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
+          </div>
         </div>
 
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
