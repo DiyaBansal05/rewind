@@ -4,6 +4,7 @@ import { apiFetch, clearAuth } from '../api/client'
 import type { EnrolledBatch, NotificationItem, StudentRecordingRequest } from '../api/types'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { RefreshButton } from '../components/RefreshButton'
+import { INSTITUTE_NAME } from '../constants'
 
 const STATUS_STYLES: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-700',
@@ -43,12 +44,14 @@ export function StudentDashboard() {
   const [batches, setBatches] = useState<EnrolledBatch[]>([])
   const [history, setHistory] = useState<StudentRecordingRequest[]>([])
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [studentName, setStudentName] = useState('')
   const [selectedBatch, setSelectedBatch] = useState('')
   const [classDate, setClassDate] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   function refresh() {
+    apiFetch<{ name: string; phoneNumber: string }>('/api/student/me').then((me) => setStudentName(me.name)).catch(() => {})
     apiFetch<EnrolledBatch[]>('/api/student/batches').then((b) => {
       setBatches(b)
       setSelectedBatch((prev) => prev || (b.length > 0 ? b[0].batchId : ''))
@@ -86,7 +89,10 @@ export function StudentDashboard() {
     <main className="min-h-screen bg-slate-50 px-4 py-6 md:py-8">
       <div className="mx-auto max-w-4xl">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl md:text-2xl font-semibold text-slate-900">My recordings</h1>
+          <div>
+            <h1 className="text-xl md:text-2xl font-semibold text-slate-900">{INSTITUTE_NAME}</h1>
+            <p className="text-xs md:text-sm text-slate-400">{studentName ? `Welcome, ${studentName}` : 'Welcome'}</p>
+          </div>
           <div className="flex items-center gap-3">
             <RefreshButton onClick={refresh} />
             <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>

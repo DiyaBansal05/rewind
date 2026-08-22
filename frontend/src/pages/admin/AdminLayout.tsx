@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { apiFetch, clearAuth } from '../../api/client'
 import type { QueueItem } from '../../api/types'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
+import { INSTITUTE_NAME, ADMIN_DISPLAY_NAME } from '../../constants'
 
 const NAV_ITEMS = [
   { to: '/admin/requests', label: 'Requests', icon: RequestsIcon },
@@ -28,7 +29,10 @@ export function AdminLayout() {
       <div className="mx-auto max-w-4xl">
         {/* Header */}
         <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-slate-900">Admin dashboard</h1>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900">{INSTITUTE_NAME}</h1>
+            <p className="text-xs text-slate-400">Welcome, {ADMIN_DISPLAY_NAME}</p>
+          </div>
           <div className="flex items-center gap-4">
             <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
           </div>
