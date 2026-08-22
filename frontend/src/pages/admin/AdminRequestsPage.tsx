@@ -41,7 +41,7 @@ export function AdminRequestsPage() {
       {queue.length === 0 ? (
         <p className="text-sm text-slate-400 py-8 text-center">Nothing pending right now.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {queue.map((item) => {
             const isDeciding = decidingId === item.id
             return (

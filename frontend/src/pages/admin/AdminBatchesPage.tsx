@@ -55,7 +55,7 @@ export function AdminBatchesPage() {
       {batches.length === 0 ? (
         <p className="text-sm text-slate-400 py-8 text-center">No batches yet.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {batches.map((b) => (
             <div key={b.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
               <div className="flex items-start justify-between gap-2">

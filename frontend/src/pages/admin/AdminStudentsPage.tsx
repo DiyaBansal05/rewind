@@ -80,7 +80,7 @@ export function AdminStudentsPage() {
       ) : filteredStudents.length === 0 ? (
         <p className="text-sm text-slate-400 py-8 text-center">No students match your search/filter.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {filteredStudents.map((s) => (
             <div key={s.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
               <button onClick={() => toggleStudent(s.id)} className="flex w-full items-center justify-between gap-2 text-left">

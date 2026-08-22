@@ -26,64 +26,62 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-4xl">
-        {/* Header */}
-        <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      {/* Header -- full-bleed background, content constrained inside it */}
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200">
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-slate-900">{INSTITUTE_NAME}</h1>
             <p className="text-xs text-slate-400">Welcome, {ADMIN_DISPLAY_NAME}</p>
           </div>
-          <div className="flex items-center gap-4">
-            <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
-          </div>
+          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
         </div>
+      </div>
 
-        {/* Desktop top tabs */}
-        <div className="hidden md:block px-4 pt-4">
-          <div className="bg-slate-200/60 rounded-xl p-1 grid grid-cols-3 text-sm font-medium max-w-md">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to} to={item.to}
-                className={({ isActive }) =>
-                  `rounded-lg py-2 text-center transition ${isActive ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`
-                }
-              >
-                {item.label}
+      {/* Desktop top tabs */}
+      <div className="hidden md:block mx-auto max-w-6xl px-4 md:px-8 pt-4">
+        <div className="bg-slate-200/60 rounded-xl p-1 grid grid-cols-3 text-sm font-medium max-w-lg">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to} to={item.to}
+              className={({ isActive }) =>
+                `rounded-lg py-2 text-center transition ${isActive ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`
+              }
+            >
+              {item.label}
+              {item.to === '/admin/requests' && pendingCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] w-4 h-4">
+                  {pendingCount}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </div>
+
+      {/* Page content */}
+      <div className="mx-auto max-w-6xl px-4 md:px-8 py-4 pb-24 md:pb-8">
+        <Outlet />
+      </div>
+
+      {/* Mobile bottom tab bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-20">
+        <div className="mx-auto max-w-6xl grid grid-cols-3">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to} to={item.to}
+              className={({ isActive }) => `flex flex-col items-center gap-1 py-3 ${isActive ? 'text-slate-900' : 'text-slate-400'}`}
+            >
+              <div className="relative">
+                <item.icon />
                 {item.to === '/admin/requests' && pendingCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] w-4 h-4">
+                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">
                     {pendingCount}
                   </span>
                 )}
-              </NavLink>
-            ))}
-          </div>
-        </div>
-
-        {/* Page content */}
-        <div className="px-4 py-4 pb-24 md:pb-8">
-          <Outlet />
-        </div>
-
-        {/* Mobile bottom tab bar */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-20">
-          <div className="mx-auto max-w-4xl grid grid-cols-3">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to} to={item.to}
-                className={({ isActive }) => `flex flex-col items-center gap-1 py-3 ${isActive ? 'text-slate-900' : 'text-slate-400'}`}
-              >
-                <div className="relative">
-                  <item.icon />
-                  {item.to === '/admin/requests' && pendingCount > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">
-                      {pendingCount}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[11px] font-medium">{item.label}</span>
-              </NavLink>
-            ))}
-          </div>
+              </div>
+              <span className="text-[11px] font-medium">{item.label}</span>
+            </NavLink>
+          ))}
         </div>
       </div>
     </div>
