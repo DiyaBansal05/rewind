@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { apiFetch, clearAuth } from '../api/client'
+import { apiFetch, clearAuth, ApiError } from '../api/client'
 import {
   DAYS_OF_WEEK, type Batch, type DayOfWeek, type QueueItem, type RegistrationLink,
   type StudentSummary, type StudentRequestDetail,
@@ -27,6 +27,8 @@ export function AdminDashboard() {
   const [studentRequests, setStudentRequests] = useState<StudentRequestDetail[]>([])
   const [studentSearch, setStudentSearch] = useState('')
   const [studentBatchFilter, setStudentBatchFilter] = useState('ALL')
+  const [decidingId, setDecidingId] = useState<string | null>(null)
+  const [decideError, setDecideError] = useState<{ id: string; message: string } | null>(null)
 
   const filteredStudents = students.filter((s) => {
     const matchesSearch = studentSearch.trim() === ''
@@ -71,11 +73,40 @@ export function AdminDashboard() {
   }
 
   async function decide(id: string, action: 'approve' | 'deny') {
-    await apiFetch(`/api/admin/recording-requests/${id}/${action}`, { method: 'POST' })
-    refreshQueue()
-    refreshStudents()
-    if (expandedStudentId) {
-      apiFetch<StudentRequestDetail[]>(`/api/admin/students/${expandedStudentId}/recording-requests`).then(setStudentRequests)
+    setDecidingId(id)
+    setDecideError(null)
+    try {
+      await apiFetch(`/api/admin/recording-requests/${id}/${action}`, { method: 'POST' })
+      refreshQueue()
+      refreshStudents()
+      if (expandedStudentId) {
+        apiFetch<StudentRequestDetail[]>(`/api/admin/students/${expandedStudentId}/recording-requests`).then(setStudentRequests)
+      }
+    } catch (err) {
+      setDecideError({ id, message: describeDecideError(err) })
+    } finally {
+      setDecidingId(null)
+    }
+  }
+
+  function describeDecideError(err: unknown): string {
+    if (!(err instanceof ApiError)) return 'Something went wrong. Try again.'
+    try {
+      const body = JSON.parse(err.message) as { reason?: string; message?: string }
+      switch (body.reason) {
+        case 'ALREADY_DECIDED':
+          return 'This request was already approved or denied (maybe from another tab).'
+        case 'NO_MATCH':
+          return body.message ?? 'No matching Zoom recording found for this class date/time yet.'
+        case 'MULTIPLE_CANDIDATES':
+          return 'Multiple possible recordings match this time window -- manual selection isn\'t built into this view yet.'
+        case 'LOOKUP_NOT_ALLOWED':
+          return body.message ?? 'That date is outside the allowed lookup window.'
+        default:
+          return body.message ?? 'Something went wrong. Try again.'
+      }
+    } catch {
+      return 'Something went wrong. Try again.'
     }
   }
 
@@ -101,18 +132,36 @@ export function AdminDashboard() {
             <p className="mt-3 text-sm text-slate-400">Nothing pending right now.</p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-100">
-              {queue.map((item) => (
-                <li key={item.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">{item.studentName} <span className="font-normal text-slate-400">({item.studentPhone})</span></p>
-                    <p className="text-xs text-slate-500">{item.batchName} &middot; class on {item.classDate}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => decide(item.id, 'approve')} className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">Approve</button>
-                    <button onClick={() => decide(item.id, 'deny')} className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200">Deny</button>
-                  </div>
-                </li>
-              ))}
+              {queue.map((item) => {
+                const isDeciding = decidingId === item.id
+                return (
+                  <li key={item.id} className="py-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">{item.studentName} <span className="font-normal text-slate-400">({item.studentPhone})</span></p>
+                        <p className="text-xs text-slate-500">{item.batchName} &middot; class on {item.classDate}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => decide(item.id, 'approve')} disabled={isDeciding}
+                          className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {isDeciding ? 'Working...' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => decide(item.id, 'deny')} disabled={isDeciding}
+                          className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    </div>
+                    {decideError?.id === item.id && (
+                      <p className="mt-2 text-xs text-red-600">{decideError.message}</p>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
