@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { apiFetch, setAuth } from '../api/client'
+import { BrandHeader } from '../components/BrandHeader'
 
 interface BatchInfo {
   batchName: string
@@ -50,16 +51,17 @@ export function Register() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-900">Batch registration</h1>
+        <BrandHeader
+          title="Register for your batch"
+          subtitle={batchInfo && (
+            <>You're joining <span className="font-medium text-slate-700">{batchInfo.batchName}</span> &middot; {batchInfo.courseName}</>
+          )}
+        />
 
-        {linkError && <p className="mt-4 text-sm text-red-600">{linkError}</p>}
+        {linkError && <p className="text-sm text-red-600">{linkError}</p>}
 
         {batchInfo && (
           <>
-            <p className="mt-1 text-sm text-slate-500">
-              Registering for <span className="font-medium text-slate-700">{batchInfo.batchName}</span> &middot; {batchInfo.courseName}
-            </p>
-
             <form onSubmit={handleSubmit}>
               <label className="mt-6 block text-sm font-medium text-slate-700">Your name</label>
               <input

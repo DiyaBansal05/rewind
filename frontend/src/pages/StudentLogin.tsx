@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiFetch, setAuth, ApiError } from '../api/client'
+import { BrandHeader } from '../components/BrandHeader'
 
 export function StudentLogin() {
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -33,8 +34,7 @@ export function StudentLogin() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-900">Student sign in</h1>
-        <p className="mt-1 text-sm text-slate-500">Enter the phone number you registered with.</p>
+        <BrandHeader title="Student sign in" subtitle="Enter the phone number you registered with." />
 
         <label className="mt-6 block text-sm font-medium text-slate-700">Phone number</label>
         <input
