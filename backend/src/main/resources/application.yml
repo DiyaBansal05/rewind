@@ -16,7 +16,10 @@ spring:
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
 
 server:
-  port: 8080
+  # Render (like most PaaS providers) injects a dynamic PORT env var for
+  # web services and expects the app to listen on it -- falls back to 8080
+  # for local dev where PORT isn't set.
+  port: ${PORT:8080}
 
 app:
   # Frontend and backend are separate origins (different ports locally,
