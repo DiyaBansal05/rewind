@@ -14,14 +14,21 @@ import org.springframework.stereotype.Service;
  * Zoom recordings found for that date. Every batch shares one Zoom account,
  * so a single day can have multiple recordings (different batches at
  * different times) -- this narrows candidates to actual video files whose
- * start time falls within the batch's scheduled class window (+/- a
- * tolerance for late starts), and never auto-picks when the result is
- * ambiguous.
+ * start time falls within the batch's scheduled class window, and never
+ * auto-picks when the result is ambiguous.
+ *
+ * The window starts exactly at the batch's scheduled start time (no early
+ * tolerance) -- back-to-back batches on the same Zoom account mean a few
+ * minutes of slack before the scheduled start risks pulling in the tail of
+ * the *previous* class's recording instead. It extends past the scheduled
+ * end time by END_TOLERANCE_MINUTES to allow for classes that simply run
+ * long, which doesn't have the same mixup risk since nothing else is
+ * expected to start recording during that window.
  */
 @Service
 public class ZoomRecordingMatcher {
 
-    private static final int TOLERANCE_MINUTES = 15;
+    private static final int END_TOLERANCE_MINUTES = 15;
 
     private final ZoomRecordingLookupService lookupService;
     private final ZoneId zoneId;
@@ -42,8 +49,8 @@ public class ZoomRecordingMatcher {
     public MatchResult match(Batch batch, LocalDate classDate) {
         List<ZoomRecordingLookupService.RecordingFileCandidate> all = lookupService.findCandidates(classDate);
 
-        LocalTime windowStart = batch.getClassStartTime().minusMinutes(TOLERANCE_MINUTES);
-        LocalTime windowEnd = batch.getClassEndTime().plusMinutes(TOLERANCE_MINUTES);
+        LocalTime windowStart = batch.getClassStartTime();
+        LocalTime windowEnd = batch.getClassEndTime().plusMinutes(END_TOLERANCE_MINUTES);
 
         List<ZoomRecordingLookupService.RecordingFileCandidate> matched = all.stream()
                 .filter(c -> "MP4".equalsIgnoreCase(c.fileType()))

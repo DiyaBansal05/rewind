@@ -35,6 +35,12 @@ export interface QueueItem {
   requestedAt: string
 }
 
+export interface RecordingCandidate {
+  recordingFileId: string
+  meetingTopic: string
+  startTime: string
+}
+
 export interface StudentRecordingRequest {
   id: string
   batchId: string
