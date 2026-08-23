@@ -1,15 +1,9 @@
 package com.recordingportal.backend.recording;
 
-import com.recordingportal.backend.zoom.ZoomOAuthTokenService;
 import com.recordingportal.backend.zoom.ZoomRecordingLookupService;
+import com.recordingportal.backend.zoom.ZoomRecordingStreamer;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -22,16 +16,21 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Public redemption endpoint for a recording access link. This token IS the
- * auth for this one resource -- a student may click it from a WhatsApp
- * message without an active portal session, so this is a standalone page
- * (not part of the React SPA -- a video/media link shouldn't route through
- * a client-side app framework anyway).
+ * Public redemption endpoints for recording access links. The token in the
+ * URL IS the auth for that one resource -- clicked from a WhatsApp message
+ * or an admin's approval screen without necessarily an active portal
+ * session, so these are standalone routes (not part of the React SPA -- a
+ * video/media link shouldn't route through a client-side app framework
+ * anyway).
  *
- * On a valid token, fetches a *fresh* download URL from Zoom at redeem-time
- * (never caches Zoom's URL long-term) and proxy-streams the video through
- * this backend -- the Zoom bearer token never reaches the client, and we
- * fully control expiry/revocation independent of Zoom's own settings.
+ * Two flavors share the same underlying mechanism (see ZoomRecordingStreamer):
+ *  - /r/{token}: a student's approved recording, long-lived (app.access.expiration-hours).
+ *  - /r/preview/{token}: an admin previewing a MULTIPLE_CANDIDATES option before
+ *    picking which one to approve -- short-lived (see AccessTokenService.PREVIEW_EXPIRATION).
+ *
+ * Both fetch a *fresh* download URL from Zoom at redeem-time (never caching
+ * Zoom's URL long-term) and proxy-stream the video through this backend --
+ * the Zoom bearer token never reaches the client either way.
  *
  * Known simplification: no HTTP Range support yet, so browser seek/scrub on
  * the video player won't be as smooth as native Zoom playback. Fine for now;
@@ -47,19 +46,19 @@ public class RecordingAccessController {
     private final RecordingRequestRepository recordingRequestRepository;
     private final AccessEventRepository accessEventRepository;
     private final ZoomRecordingLookupService zoomRecordingLookupService;
-    private final ZoomOAuthTokenService zoomOAuthTokenService;
+    private final ZoomRecordingStreamer zoomRecordingStreamer;
 
     public RecordingAccessController(
             AccessTokenService accessTokenService,
             RecordingRequestRepository recordingRequestRepository,
             AccessEventRepository accessEventRepository,
             ZoomRecordingLookupService zoomRecordingLookupService,
-            ZoomOAuthTokenService zoomOAuthTokenService) {
+            ZoomRecordingStreamer zoomRecordingStreamer) {
         this.accessTokenService = accessTokenService;
         this.recordingRequestRepository = recordingRequestRepository;
         this.accessEventRepository = accessEventRepository;
         this.zoomRecordingLookupService = zoomRecordingLookupService;
-        this.zoomOAuthTokenService = zoomOAuthTokenService;
+        this.zoomRecordingStreamer = zoomRecordingStreamer;
     }
 
     @GetMapping("/r/{token}")
@@ -104,9 +103,6 @@ public class RecordingAccessController {
                     "We couldn't reach the recording right now. Try again in a bit, or ask your instructor if the problem persists.");
         }
 
-        String downloadUrl = fresh.get().downloadUrl();
-        String zoomToken = zoomOAuthTokenService.getAccessToken();
-
         // Written directly to the raw servlet response rather than returned via
         // ResponseEntity<StreamingResponseBody>: Spring's streaming-body return
         // handler relies on the method's *declared* generic return type, and
@@ -115,27 +111,38 @@ public class RecordingAccessController {
         // which Spring failed to recognize as a streaming case at runtime
         // (fell through to a plain HttpMessageConverter lookup and errored).
         // Writing to the servlet response directly sidesteps that entirely.
-        servletResponse.setContentType("video/mp4");
-        // Zoom's download_url commonly 3xx-redirects to the actual CDN location;
-        // HttpClient.newHttpClient()'s default redirect policy is NEVER, which
-        // would silently hand back an empty/redirect body instead of the video.
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-        HttpRequest zoomRequest = HttpRequest.newBuilder(URI.create(downloadUrl))
-                .header("Authorization", "Bearer " + zoomToken)
-                .GET()
-                .build();
-        try {
-            HttpResponse<InputStream> zoomResponse = client.send(zoomRequest, HttpResponse.BodyHandlers.ofInputStream());
-            if (zoomResponse.statusCode() != 200) {
-                log.error("Zoom download returned status {} for request", zoomResponse.statusCode());
-            }
-            try (InputStream in = zoomResponse.body(); OutputStream out = servletResponse.getOutputStream()) {
-                in.transferTo(out);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while streaming recording", e);
+        zoomRecordingStreamer.stream(fresh.get().downloadUrl(), servletResponse);
+        return null;
+    }
+
+    /**
+     * Admin-facing preview of one MULTIPLE_CANDIDATES option, before they've
+     * decided which recording to actually approve for the student. Token is
+     * issued alongside the candidate list itself (see AdminRecordingController.CandidateView)
+     * and is short-lived -- this is meant to be opened once, right after
+     * approval hits an ambiguous match, not saved or shared.
+     */
+    @GetMapping("/r/preview/{token}")
+    public ResponseEntity<?> preview(@PathVariable String token, HttpServletResponse servletResponse) throws IOException {
+        var claims = accessTokenService.parsePreviewToken(token);
+        if (claims.isEmpty()) {
+            return htmlPage(HttpStatus.NOT_FOUND, "Link not found", "This preview link doesn't look right or has expired.");
         }
+
+        Optional<ZoomRecordingLookupService.RecordingFileCandidate> fresh;
+        try {
+            fresh = zoomRecordingLookupService.getFreshFile(claims.get().meetingUuid(), claims.get().recordingFileId());
+        } catch (Exception e) {
+            log.error("Failed to re-fetch Zoom recording for preview", e);
+            fresh = Optional.empty();
+        }
+
+        if (fresh.isEmpty()) {
+            return htmlPage(HttpStatus.SERVICE_UNAVAILABLE, "Recording temporarily unavailable",
+                    "We couldn't reach the recording right now. Try again in a bit.");
+        }
+
+        zoomRecordingStreamer.stream(fresh.get().downloadUrl(), servletResponse);
         return null;
     }
 

@@ -63,9 +63,11 @@ public class AdminRecordingController {
     public record ApproveRequest(String zoomRecordingFileId) {
     }
 
-    public record CandidateView(String recordingFileId, String meetingTopic, Instant startTime) {
-        static CandidateView from(RecordingFileCandidate c) {
-            return new CandidateView(c.recordingFileId(), c.meetingTopic(), c.startTime());
+    public record CandidateView(String recordingFileId, String meetingTopic, Instant startTime, String previewUrl) {
+        static CandidateView from(RecordingFileCandidate c, AccessTokenService accessTokenService, String backendBaseUrl) {
+            String previewToken = accessTokenService.issuePreview(c.meetingUuid(), c.recordingFileId()).rawToken();
+            String previewUrl = backendBaseUrl + "/r/preview/" + previewToken;
+            return new CandidateView(c.recordingFileId(), c.meetingTopic(), c.startTime(), previewUrl);
         }
     }
 
@@ -114,7 +116,9 @@ public class AdminRecordingController {
         } else if (!matchResult.isUnambiguous()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                     "reason", "MULTIPLE_CANDIDATES",
-                    "candidates", matchResult.candidates().stream().map(CandidateView::from).toList()));
+                    "candidates", matchResult.candidates().stream()
+                            .map(c -> CandidateView.from(c, accessTokenService, backendBaseUrl))
+                            .toList()));
         } else {
             chosen = matchResult.candidates().get(0);
         }

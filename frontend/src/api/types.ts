@@ -39,6 +39,7 @@ export interface RecordingCandidate {
   recordingFileId: string
   meetingTopic: string
   startTime: string
+  previewUrl: string
 }
 
 export interface StudentRecordingRequest {

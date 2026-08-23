@@ -81,12 +81,20 @@ export function AdminRequestsPage() {
                             <p className="text-xs font-medium text-slate-800 truncate">{c.meetingTopic}</p>
                             <p className="text-[11px] text-slate-500">{formatTime(c.startTime)}</p>
                           </div>
-                          <button
-                            onClick={() => decide(item.id, 'approve', c.recordingFileId)} disabled={isDeciding}
-                            className="shrink-0 rounded-md bg-emerald-600 text-white text-xs font-medium px-2.5 py-1.5 hover:bg-emerald-700 disabled:opacity-50"
-                          >
-                            {isDeciding ? '...' : 'Use this'}
-                          </button>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <a
+                              href={c.previewUrl} target="_blank" rel="noreferrer"
+                              className="rounded-md border border-slate-300 text-slate-700 text-xs font-medium px-2.5 py-1.5 hover:bg-slate-50"
+                            >
+                              Preview
+                            </a>
+                            <button
+                              onClick={() => decide(item.id, 'approve', c.recordingFileId)} disabled={isDeciding}
+                              className="rounded-md bg-emerald-600 text-white text-xs font-medium px-2.5 py-1.5 hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              {isDeciding ? '...' : 'Use this'}
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
