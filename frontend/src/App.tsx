@@ -4,6 +4,7 @@ import { AdminLogin } from './pages/AdminLogin'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminRequestsPage } from './pages/admin/AdminRequestsPage'
 import { AdminBatchesPage } from './pages/admin/AdminBatchesPage'
+import { AdminBatchDetailPage } from './pages/admin/AdminBatchDetailPage'
 import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { StudentLogin } from './pages/StudentLogin'
 import { StudentDashboard } from './pages/StudentDashboard'
@@ -28,6 +29,7 @@ function App() {
           <Route index element={<Navigate to="requests" replace />} />
           <Route path="requests" element={<AdminRequestsPage />} />
           <Route path="batches" element={<AdminBatchesPage />} />
+          <Route path="batches/:batchId" element={<AdminBatchDetailPage />} />
           <Route path="students" element={<AdminStudentsPage />} />
         </Route>
         <Route path="/student/login" element={<StudentLogin />} />

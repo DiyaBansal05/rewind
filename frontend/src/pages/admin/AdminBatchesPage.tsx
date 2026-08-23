@@ -1,12 +1,14 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { apiFetch } from '../../api/client'
-import type { Batch, EnrolledStudent, EnrollmentRequestItem, RegistrationLink } from '../../api/types'
+import type { Batch, EnrollmentRequestItem, RegistrationLink } from '../../api/types'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { RefreshButton, Fab } from './shared'
 import { CreateBatchForm } from './CreateBatchForm'
 
 export function AdminBatchesPage() {
+  const navigate = useNavigate()
   const [batches, setBatches] = useState<Batch[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [qrBatchId, setQrBatchId] = useState<string | null>(null)
@@ -14,10 +16,6 @@ export function AdminBatchesPage() {
 
   const [joinRequests, setJoinRequests] = useState<EnrollmentRequestItem[]>([])
   const [decidingRequestId, setDecidingRequestId] = useState<string | null>(null)
-
-  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null)
-  const [roster, setRoster] = useState<EnrolledStudent[]>([])
-  const [removingId, setRemovingId] = useState<string | null>(null)
 
   function refresh() {
     apiFetch<Batch[]>('/api/admin/batches').then(setBatches).catch(() => {})
@@ -33,16 +31,6 @@ export function AdminBatchesPage() {
     setQrLink(link)
   }
 
-  async function toggleRoster(batchId: string) {
-    if (expandedBatchId === batchId) {
-      setExpandedBatchId(null)
-      return
-    }
-    setExpandedBatchId(batchId)
-    const students = await apiFetch<EnrolledStudent[]>(`/api/admin/batches/${batchId}/students`)
-    setRoster(students)
-  }
-
   async function decide(requestId: string, action: 'approve' | 'deny') {
     setDecidingRequestId(requestId)
     try {
@@ -52,16 +40,6 @@ export function AdminBatchesPage() {
       // Swallow -- the request stays in the list and the admin can just retry.
     } finally {
       setDecidingRequestId(null)
-    }
-  }
-
-  async function removeStudent(enrollmentId: string) {
-    setRemovingId(enrollmentId)
-    try {
-      await apiFetch(`/api/admin/enrollments/${enrollmentId}`, { method: 'DELETE' })
-      setRoster((prev) => prev.filter((s) => s.enrollmentId !== enrollmentId))
-    } finally {
-      setRemovingId(null)
     }
   }
 
@@ -93,8 +71,11 @@ export function AdminBatchesPage() {
       )}
 
       {joinRequests.length > 0 && (
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-slate-900 mb-2">Join requests</h3>
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+          <div className="mb-2">
+            <h3 className="text-base font-semibold text-slate-900">Batch join requests</h3>
+            <p className="text-xs text-slate-500">{joinRequests.length} waiting for your approval</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
             {joinRequests.map((r) => {
               const isDeciding = decidingRequestId === r.id
@@ -133,8 +114,8 @@ export function AdminBatchesPage() {
           {batches.map((b) => (
             <div key={b.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
               <div className="flex items-start justify-between gap-2">
-                <button onClick={() => toggleRoster(b.id)} className="min-w-0 text-left flex-1">
-                  <p className="text-sm font-semibold truncate">{b.name}</p>
+                <button onClick={() => navigate(`/admin/batches/${b.id}`)} className="min-w-0 text-left flex-1">
+                  <p className="text-sm font-semibold truncate hover:underline">{b.name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {b.courseName} &middot; {b.classDaysOfWeek.map((d) => d.slice(0, 3)).join(', ')} &middot; {b.classStartTime.slice(0, 5)}&ndash;{b.classEndTime.slice(0, 5)}
                   </p>
@@ -155,33 +136,6 @@ export function AdminBatchesPage() {
                     className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500"
                     onFocus={(e) => e.currentTarget.select()}
                   />
-                </div>
-              )}
-              {expandedBatchId === b.id && (
-                <div className="mt-3 rounded-lg bg-slate-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Students ({roster.length})
-                  </p>
-                  {roster.length === 0 ? (
-                    <p className="mt-1 text-xs text-slate-400">No approved students yet.</p>
-                  ) : (
-                    <ul className="mt-1.5 space-y-1.5">
-                      {roster.map((s) => (
-                        <li key={s.enrollmentId} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="text-slate-700 truncate">
-                            {s.name} <span className="text-slate-400">{s.phoneNumber}</span>
-                          </span>
-                          <button
-                            onClick={() => removeStudent(s.enrollmentId)}
-                            disabled={removingId === s.enrollmentId}
-                            className="shrink-0 text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
-                          >
-                            {removingId === s.enrollmentId ? 'Removing...' : 'Remove'}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
               )}
             </div>

@@ -32,7 +32,7 @@ export function AdminRequestsPage() {
     <div>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Pending requests</h2>
+          <h2 className="text-base font-semibold text-slate-900">Recording requests</h2>
           <p className="text-xs text-slate-400">{queue.length} waiting</p>
         </div>
         <RefreshButton onClick={refresh} />
