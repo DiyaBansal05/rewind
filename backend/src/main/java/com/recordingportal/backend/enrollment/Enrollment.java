@@ -1,9 +1,12 @@
 package com.recordingportal.backend.enrollment;
 
+import com.recordingportal.backend.admin.Admin;
 import com.recordingportal.backend.batch.Batch;
 import com.recordingportal.backend.student.Student;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -36,6 +39,21 @@ public class Enrollment {
     @JoinColumn(name = "batch_id", nullable = false)
     private Batch batch;
 
+    /** When this row was first created -- i.e. when the join request was raised (or, for
+     *  rows that predate the approval workflow, when the student was directly enrolled). */
     @Column(nullable = false)
     private Instant enrolledAt = Instant.now();
+
+    /** Scanning a QR code no longer enrolls a student directly -- it raises a PENDING
+     *  request that an admin must approve before the student shows up in the batch roster
+     *  or can request recordings for it. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EnrollmentStatus status = EnrollmentStatus.PENDING;
+
+    private Instant decidedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "decided_by_admin_id")
+    private Admin decidedByAdmin;
 }

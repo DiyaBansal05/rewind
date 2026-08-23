@@ -1,6 +1,7 @@
 package com.recordingportal.backend.notification;
 
 import com.recordingportal.backend.admin.AdminRepository;
+import com.recordingportal.backend.enrollment.Enrollment;
 import com.recordingportal.backend.recording.RecordingRequest;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,7 +33,47 @@ public class NotificationServiceImpl implements NotificationService {
                 request.getBatch().getName(),
                 request.getBatch().getCourseName(),
                 request.getClassDate());
+        notifyAdmin(message);
+    }
 
+    @Override
+    public void notifyStudentRecordingApproved(RecordingRequest request, String accessUrl) {
+        String message = "Your recording for %s on %s is ready: %s".formatted(
+                request.getBatch().getName(), request.getClassDate(), accessUrl);
+
+        NotificationLog logEntry = new NotificationLog();
+        logEntry.setRecipientType(RecipientType.STUDENT);
+        logEntry.setRecipientId(request.getStudent().getId());
+        logEntry.setChannel(NotificationChannel.IN_APP);
+        logEntry.setPayloadSummary(message);
+        logEntry.setDeliveryStatus(DeliveryStatus.SENT);
+        notificationLogRepository.save(logEntry);
+    }
+
+    @Override
+    public void notifyAdminEnrollmentRequested(Enrollment enrollment) {
+        String message = "New join request: %s wants to join %s (%s).".formatted(
+                enrollment.getStudent().getName(),
+                enrollment.getBatch().getName(),
+                enrollment.getBatch().getCourseName());
+        notifyAdmin(message);
+    }
+
+    @Override
+    public void notifyStudentEnrollmentApproved(Enrollment enrollment) {
+        String message = "You're in! Your request to join %s (%s) has been approved.".formatted(
+                enrollment.getBatch().getName(), enrollment.getBatch().getCourseName());
+
+        NotificationLog logEntry = new NotificationLog();
+        logEntry.setRecipientType(RecipientType.STUDENT);
+        logEntry.setRecipientId(enrollment.getStudent().getId());
+        logEntry.setChannel(NotificationChannel.IN_APP);
+        logEntry.setPayloadSummary(message);
+        logEntry.setDeliveryStatus(DeliveryStatus.SENT);
+        notificationLogRepository.save(logEntry);
+    }
+
+    private void notifyAdmin(String message) {
         DeliveryStatus deliveryStatus;
         if (!whatsAppCloudApiClient.isConfigured()) {
             deliveryStatus = DeliveryStatus.SKIPPED;
@@ -50,20 +91,6 @@ public class NotificationServiceImpl implements NotificationService {
         logEntry.setChannel(NotificationChannel.WHATSAPP);
         logEntry.setPayloadSummary(message);
         logEntry.setDeliveryStatus(deliveryStatus);
-        notificationLogRepository.save(logEntry);
-    }
-
-    @Override
-    public void notifyStudentRecordingApproved(RecordingRequest request, String accessUrl) {
-        String message = "Your recording for %s on %s is ready: %s".formatted(
-                request.getBatch().getName(), request.getClassDate(), accessUrl);
-
-        NotificationLog logEntry = new NotificationLog();
-        logEntry.setRecipientType(RecipientType.STUDENT);
-        logEntry.setRecipientId(request.getStudent().getId());
-        logEntry.setChannel(NotificationChannel.IN_APP);
-        logEntry.setPayloadSummary(message);
-        logEntry.setDeliveryStatus(DeliveryStatus.SENT);
         notificationLogRepository.save(logEntry);
     }
 }

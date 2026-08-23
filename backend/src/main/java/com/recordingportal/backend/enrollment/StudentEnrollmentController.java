@@ -1,6 +1,5 @@
 package com.recordingportal.backend.enrollment;
 
-import com.recordingportal.backend.batch.Batch;
 import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
@@ -18,17 +17,21 @@ public class StudentEnrollmentController {
         this.enrollmentRepository = enrollmentRepository;
     }
 
-    public record EnrolledBatch(UUID batchId, String batchName, String courseName) {
-        static EnrolledBatch from(Batch b) {
-            return new EnrolledBatch(b.getId(), b.getName(), b.getCourseName());
+    public record EnrolledBatch(UUID batchId, String batchName, String courseName, EnrollmentStatus status) {
+        static EnrolledBatch from(Enrollment e) {
+            return new EnrolledBatch(e.getBatch().getId(), e.getBatch().getName(), e.getBatch().getCourseName(), e.getStatus());
         }
     }
 
+    /** Returns both APPROVED batches and still-PENDING join requests (but not DENIED ones)
+     *  so the dashboard can show a "waiting for approval" state instead of just silently
+     *  looking empty while a request is under review. */
     @GetMapping
     public List<EnrolledBatch> myBatches(Principal principal) {
         UUID studentId = UUID.fromString(principal.getName());
         return enrollmentRepository.findWithBatchByStudentId(studentId).stream()
-                .map(e -> EnrolledBatch.from(e.getBatch()))
+                .filter(e -> e.getStatus() != EnrollmentStatus.DENIED)
+                .map(EnrolledBatch::from)
                 .toList();
     }
 }

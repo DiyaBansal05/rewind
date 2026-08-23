@@ -1,5 +1,6 @@
 export type BatchStatus = 'ACTIVE' | 'ARCHIVED'
 export type RecordingRequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'REVOKED' | 'EXPIRED'
+export type EnrollmentStatus = 'PENDING' | 'APPROVED' | 'DENIED'
 
 export const DAYS_OF_WEEK = [
   'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
@@ -47,6 +48,24 @@ export interface EnrolledBatch {
   batchId: string
   batchName: string
   courseName: string
+  status: EnrollmentStatus
+}
+
+export interface EnrollmentRequestItem {
+  id: string
+  studentName: string
+  studentPhone: string
+  batchId: string
+  batchName: string
+  courseName: string
+  requestedAt: string
+}
+
+export interface EnrolledStudent {
+  enrollmentId: string
+  studentId: string
+  name: string
+  phoneNumber: string
 }
 
 export interface NotificationItem {

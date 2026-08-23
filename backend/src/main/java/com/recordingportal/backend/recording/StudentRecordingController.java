@@ -3,6 +3,7 @@ package com.recordingportal.backend.recording;
 import com.recordingportal.backend.batch.Batch;
 import com.recordingportal.backend.batch.BatchRepository;
 import com.recordingportal.backend.enrollment.EnrollmentRepository;
+import com.recordingportal.backend.enrollment.EnrollmentStatus;
 import com.recordingportal.backend.notification.NotificationService;
 import com.recordingportal.backend.student.Student;
 import com.recordingportal.backend.student.StudentRepository;
@@ -60,7 +61,7 @@ public class StudentRecordingController {
         UUID studentId = UUID.fromString(principal.getName());
         Student student = studentRepository.findById(studentId).orElseThrow();
 
-        if (!enrollmentRepository.existsByStudentIdAndBatchId(studentId, request.batchId())) {
+        if (!enrollmentRepository.existsByStudentIdAndBatchIdAndStatus(studentId, request.batchId(), EnrollmentStatus.APPROVED)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You're not enrolled in this batch");
         }
         Batch batch = batchRepository.findById(request.batchId()).orElseThrow();

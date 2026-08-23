@@ -1,5 +1,8 @@
 package com.recordingportal.backend.batch;
 
+import com.recordingportal.backend.enrollment.Enrollment;
+import com.recordingportal.backend.enrollment.EnrollmentRepository;
+import com.recordingportal.backend.enrollment.EnrollmentStatus;
 import com.recordingportal.backend.registration.QrTokenService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -26,10 +29,12 @@ public class BatchController {
 
     private final BatchRepository batchRepository;
     private final QrTokenService qrTokenService;
+    private final EnrollmentRepository enrollmentRepository;
 
-    public BatchController(BatchRepository batchRepository, QrTokenService qrTokenService) {
+    public BatchController(BatchRepository batchRepository, QrTokenService qrTokenService, EnrollmentRepository enrollmentRepository) {
         this.batchRepository = batchRepository;
         this.qrTokenService = qrTokenService;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
     public record CreateBatchRequest(
@@ -59,6 +64,12 @@ public class BatchController {
     }
 
     public record RegistrationLinkResponse(String token, String registrationPath) {
+    }
+
+    public record EnrolledStudent(UUID enrollmentId, UUID studentId, String name, String phoneNumber) {
+        static EnrolledStudent from(Enrollment e) {
+            return new EnrolledStudent(e.getId(), e.getStudent().getId(), e.getStudent().getName(), e.getStudent().getPhoneNumber());
+        }
     }
 
     @PostMapping
@@ -94,5 +105,14 @@ public class BatchController {
         }
         String token = qrTokenService.issueToken(id);
         return ResponseEntity.ok(new RegistrationLinkResponse(token, "/register?token=" + token));
+    }
+
+    /** The approved roster for a batch -- used by the admin's "students in this batch"
+     *  view, which also lets them remove a student (see AdminEnrollmentController). */
+    @GetMapping("/{id}/students")
+    public List<EnrolledStudent> students(@PathVariable UUID id) {
+        return enrollmentRepository.findWithStudentByBatchIdAndStatus(id, EnrollmentStatus.APPROVED).stream()
+                .map(EnrolledStudent::from)
+                .toList();
     }
 }

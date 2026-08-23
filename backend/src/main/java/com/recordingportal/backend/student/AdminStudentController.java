@@ -1,6 +1,7 @@
 package com.recordingportal.backend.student;
 
 import com.recordingportal.backend.enrollment.EnrollmentRepository;
+import com.recordingportal.backend.enrollment.EnrollmentStatus;
 import com.recordingportal.backend.recording.RecordingRequestRepository;
 import com.recordingportal.backend.recording.RecordingRequestStatus;
 import java.time.Instant;
@@ -49,6 +50,7 @@ public class AdminStudentController {
         return studentRepository.findAll().stream()
                 .map(s -> {
                     List<BatchEnrollment> batches = enrollmentRepository.findWithBatchByStudentId(s.getId()).stream()
+                            .filter(e -> e.getStatus() == EnrollmentStatus.APPROVED)
                             .map(e -> new BatchEnrollment(e.getBatch().getId(), e.getBatch().getName()))
                             .toList();
                     long total = recordingRequestRepository.countByStudentId(s.getId());

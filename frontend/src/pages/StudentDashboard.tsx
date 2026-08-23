@@ -54,7 +54,8 @@ export function StudentDashboard() {
     apiFetch<{ name: string; phoneNumber: string }>('/api/student/me').then((me) => setStudentName(me.name)).catch(() => {})
     apiFetch<EnrolledBatch[]>('/api/student/batches').then((b) => {
       setBatches(b)
-      setSelectedBatch((prev) => prev || (b.length > 0 ? b[0].batchId : ''))
+      const approved = b.filter((x) => x.status === 'APPROVED')
+      setSelectedBatch((prev) => prev || (approved.length > 0 ? approved[0].batchId : ''))
     }).catch(() => {})
     apiFetch<StudentRecordingRequest[]>('/api/student/recording-requests').then(setHistory).catch(() => {})
     apiFetch<NotificationItem[]>('/api/student/notifications').then(setNotifications).catch(() => {})
@@ -85,6 +86,9 @@ export function StudentDashboard() {
     navigate('/student/login')
   }
 
+  const approvedBatches = batches.filter((b) => b.status === 'APPROVED')
+  const pendingBatches = batches.filter((b) => b.status === 'PENDING')
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 md:py-8">
       <div className="mx-auto max-w-4xl">
@@ -99,10 +103,25 @@ export function StudentDashboard() {
           </div>
         </div>
 
+        {pendingBatches.length > 0 && (
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-medium text-amber-800">Waiting for approval</p>
+            <ul className="mt-1 space-y-0.5">
+              {pendingBatches.map((b) => (
+                <li key={b.batchId} className="text-sm text-amber-700">
+                  {b.batchName} &middot; {b.courseName} -- your instructor hasn't approved this yet.
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
           <h2 className="text-base md:text-lg font-medium text-slate-900">Request a recording</h2>
-          {batches.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">You're not enrolled in any batches yet.</p>
+          {approvedBatches.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">
+              {pendingBatches.length > 0 ? 'Once your instructor approves you, you can request recordings here.' : "You're not enrolled in any batches yet."}
+            </p>
           ) : (
             <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap items-end gap-3">
               <div>
@@ -111,7 +130,7 @@ export function StudentDashboard() {
                   value={selectedBatch} onChange={(e) => setSelectedBatch(e.target.value)}
                   className="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 >
-                  {batches.map((b) => (
+                  {approvedBatches.map((b) => (
                     <option key={b.batchId} value={b.batchId}>{b.batchName}</option>
                   ))}
                 </select>

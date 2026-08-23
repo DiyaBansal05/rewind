@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { apiFetch, clearAuth } from '../../api/client'
-import type { QueueItem } from '../../api/types'
+import type { EnrollmentRequestItem, QueueItem } from '../../api/types'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { INSTITUTE_NAME, ADMIN_DISPLAY_NAME } from '../../constants'
 
@@ -14,9 +14,16 @@ const NAV_ITEMS = [
 export function AdminLayout() {
   const navigate = useNavigate()
   const [pendingCount, setPendingCount] = useState(0)
+  const [pendingJoinCount, setPendingJoinCount] = useState(0)
+
+  const badgeCounts: Record<string, number> = {
+    '/admin/requests': pendingCount,
+    '/admin/batches': pendingJoinCount,
+  }
 
   useAutoRefresh(() => {
     apiFetch<QueueItem[]>('/api/admin/recording-requests').then((q) => setPendingCount(q.length)).catch(() => {})
+    apiFetch<EnrollmentRequestItem[]>('/api/admin/enrollment-requests').then((q) => setPendingJoinCount(q.length)).catch(() => {})
   })
 
   function logout() {
@@ -48,9 +55,9 @@ export function AdminLayout() {
               }
             >
               {item.label}
-              {item.to === '/admin/requests' && pendingCount > 0 && (
+              {badgeCounts[item.to] > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] w-4 h-4">
-                  {pendingCount}
+                  {badgeCounts[item.to]}
                 </span>
               )}
             </NavLink>
@@ -73,9 +80,9 @@ export function AdminLayout() {
             >
               <div className="relative">
                 <item.icon />
-                {item.to === '/admin/requests' && pendingCount > 0 && (
+                {badgeCounts[item.to] > 0 && (
                   <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">
-                    {pendingCount}
+                    {badgeCounts[item.to]}
                   </span>
                 )}
               </div>

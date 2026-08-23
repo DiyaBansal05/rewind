@@ -4,6 +4,8 @@ import com.recordingportal.backend.batch.Batch;
 import com.recordingportal.backend.batch.BatchRepository;
 import com.recordingportal.backend.enrollment.Enrollment;
 import com.recordingportal.backend.enrollment.EnrollmentRepository;
+import com.recordingportal.backend.enrollment.EnrollmentStatus;
+import com.recordingportal.backend.notification.NotificationService;
 import com.recordingportal.backend.security.JwtService;
 import com.recordingportal.backend.security.Role;
 import com.recordingportal.backend.student.Student;
@@ -27,6 +29,7 @@ public class RegistrationController {
     private final BatchRepository batchRepository;
     private final StudentRepository studentRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final NotificationService notificationService;
     private final JwtService jwtService;
 
     public RegistrationController(
@@ -34,11 +37,13 @@ public class RegistrationController {
             BatchRepository batchRepository,
             StudentRepository studentRepository,
             EnrollmentRepository enrollmentRepository,
+            NotificationService notificationService,
             JwtService jwtService) {
         this.qrTokenService = qrTokenService;
         this.batchRepository = batchRepository;
         this.studentRepository = studentRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.notificationService = notificationService;
         this.jwtService = jwtService;
     }
 
@@ -48,7 +53,11 @@ public class RegistrationController {
     public record RegisterRequest(@NotBlank String token, @NotBlank String name, @NotBlank String phoneNumber) {
     }
 
-    public record RegisterResponse(String token, boolean alreadyEnrolled) {
+    /** enrollmentStatus is PENDING for a fresh (or re-raised) join request, or APPROVED if
+     *  the student was already an approved member of this batch -- the frontend uses this to
+     *  decide whether to drop the student straight into their dashboard or show a
+     *  "waiting on your instructor" confirmation instead. */
+    public record RegisterResponse(String token, EnrollmentStatus enrollmentStatus) {
     }
 
     @GetMapping("/batch-info")
@@ -79,15 +88,30 @@ public class RegistrationController {
                     return studentRepository.save(s);
                 });
 
-        boolean alreadyEnrolled = enrollmentRepository.existsByStudentIdAndBatchId(student.getId(), batch.getId());
-        if (!alreadyEnrolled) {
+        Enrollment existing = enrollmentRepository.findByStudentIdAndBatchId(student.getId(), batch.getId()).orElse(null);
+        EnrollmentStatus resultStatus;
+        if (existing == null) {
             Enrollment enrollment = new Enrollment();
             enrollment.setStudent(student);
             enrollment.setBatch(batch);
             enrollmentRepository.save(enrollment);
+            notificationService.notifyAdminEnrollmentRequested(enrollment);
+            resultStatus = EnrollmentStatus.PENDING;
+        } else if (existing.getStatus() == EnrollmentStatus.DENIED) {
+            // Let a previously-denied student ask again -- e.g. the admin turned them down
+            // by mistake, or they now have permission.
+            existing.setStatus(EnrollmentStatus.PENDING);
+            existing.setDecidedAt(null);
+            existing.setDecidedByAdmin(null);
+            enrollmentRepository.save(existing);
+            notificationService.notifyAdminEnrollmentRequested(existing);
+            resultStatus = EnrollmentStatus.PENDING;
+        } else {
+            // Already PENDING or already APPROVED -- nothing to do, don't spam the admin.
+            resultStatus = existing.getStatus();
         }
 
         String jwt = jwtService.issueToken(student.getId(), Role.STUDENT);
-        return ResponseEntity.ok(new RegisterResponse(jwt, alreadyEnrolled));
+        return ResponseEntity.ok(new RegisterResponse(jwt, resultStatus));
     }
 }
