@@ -52,32 +52,32 @@ export function CreateBatchForm({ onCreated, onCancel }: { onCreated: () => void
     <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-slate-900">New batch</h3>
-        <button type="button" onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+        <button type="button" onClick={onCancel} className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700">Cancel</button>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600">Batch name</label>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+          <input required value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">Course name</label>
-          <input required value={courseName} onChange={(e) => setCourseName(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+          <input required value={courseName} onChange={(e) => setCourseName(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">Start date</label>
-          <input type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+          <input type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">End date</label>
-          <input type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+          <input type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">Class start time</label>
-          <input type="time" required value={classStartTime} onChange={(e) => setClassStartTime(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+          <input type="time" required value={classStartTime} onChange={(e) => setClassStartTime(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">Class end time</label>
-          <input type="time" required value={classEndTime} onChange={(e) => setClassEndTime(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+          <input type="time" required value={classEndTime} onChange={(e) => setClassEndTime(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
       </div>
 
@@ -86,7 +86,7 @@ export function CreateBatchForm({ onCreated, onCancel }: { onCreated: () => void
         {DAYS_OF_WEEK.map((day) => (
           <button
             type="button" key={day} onClick={() => toggleDay(day)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${days.has(day) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+            className={`rounded-full px-3 py-2 text-xs font-medium ${days.has(day) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
           >
             {day.slice(0, 3)}
           </button>
@@ -95,7 +95,7 @@ export function CreateBatchForm({ onCreated, onCancel }: { onCreated: () => void
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-      <button type="submit" disabled={saving} className="mt-4 w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+      <button type="submit" disabled={saving} className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
         {saving ? 'Creating...' : 'Create batch'}
       </button>
     </form>

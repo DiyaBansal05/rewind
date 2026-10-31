@@ -6,9 +6,13 @@ import type { Batch, EnrollmentRequestItem, RegistrationLink } from '../../api/t
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { RefreshButton, Fab } from './shared'
 import { CreateBatchForm } from './CreateBatchForm'
+import { BottomSheet } from '../../components/BottomSheet'
+import { useAdminOutlet } from './adminOutlet'
 
 export function AdminBatchesPage() {
   const navigate = useNavigate()
+  const { refreshBadges } = useAdminOutlet()
+  const [copied, setCopied] = useState(false)
   const [batches, setBatches] = useState<Batch[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [qrBatchId, setQrBatchId] = useState<string | null>(null)
@@ -27,8 +31,18 @@ export function AdminBatchesPage() {
   async function showQr(batchId: string) {
     setQrBatchId(batchId)
     setQrLink(null)
+    setCopied(false)
     const link = await apiFetch<RegistrationLink>(`/api/admin/batches/${batchId}/registration-link`)
     setQrLink(link)
+  }
+
+  async function copyLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
   }
 
   async function decide(requestId: string, action: 'approve' | 'deny') {
@@ -36,6 +50,7 @@ export function AdminBatchesPage() {
     try {
       await apiFetch(`/api/admin/enrollment-requests/${requestId}/${action}`, { method: 'POST' })
       refresh()
+      refreshBadges()
     } catch {
       // Swallow -- the request stays in the list and the admin can just retry.
     } finally {
@@ -89,13 +104,13 @@ export function AdminBatchesPage() {
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <button
                       onClick={() => decide(r.id, 'approve')} disabled={isDeciding}
-                      className="bg-emerald-600 text-white font-medium text-sm rounded-lg py-2 active:scale-95 transition disabled:opacity-50"
+                      className="bg-emerald-600 text-white font-medium text-sm rounded-xl py-2.5 active:scale-[0.98] transition disabled:opacity-50"
                     >
                       {isDeciding ? 'Working...' : 'Approve'}
                     </button>
                     <button
                       onClick={() => decide(r.id, 'deny')} disabled={isDeciding}
-                      className="bg-slate-100 text-slate-600 font-medium text-sm rounded-lg py-2 active:scale-95 transition disabled:opacity-50"
+                      className="bg-slate-100 text-slate-700 font-medium text-sm rounded-xl py-2.5 active:scale-[0.98] transition disabled:opacity-50"
                     >
                       Deny
                     </button>
@@ -112,35 +127,53 @@ export function AdminBatchesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {batches.map((b) => (
-            <div key={b.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
-              <div className="flex items-start justify-between gap-2">
-                <button onClick={() => navigate(`/admin/batches/${b.id}`)} className="min-w-0 text-left flex-1">
-                  <p className="text-sm font-semibold truncate hover:underline">{b.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {b.courseName} &middot; {b.classDaysOfWeek.map((d) => d.slice(0, 3)).join(', ')} &middot; {b.classStartTime.slice(0, 5)}&ndash;{b.classEndTime.slice(0, 5)}
-                  </p>
-                </button>
-                <button
-                  onClick={() => showQr(b.id)}
-                  className="shrink-0 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  QR
-                </button>
-              </div>
-              {qrBatchId === b.id && qrLink && (
-                <div className="mt-3 flex flex-col items-start gap-2 rounded-lg bg-slate-50 p-3">
-                  <QRCodeSVG value={`${window.location.origin}${qrLink.registrationPath}`} size={140} />
-                  <input
-                    readOnly
-                    value={`${window.location.origin}${qrLink.registrationPath}`}
-                    className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500"
-                    onFocus={(e) => e.currentTarget.select()}
-                  />
-                </div>
-              )}
+            <div key={b.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3.5 flex items-start justify-between gap-2">
+              <button onClick={() => navigate(`/admin/batches/${b.id}`)} className="min-w-0 text-left flex-1 py-0.5">
+                <p className="text-sm font-semibold text-slate-900 truncate hover:underline">{b.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {b.courseName} &middot; {b.classDaysOfWeek.map((d) => d.slice(0, 3)).join(', ')} &middot; {b.classStartTime.slice(0, 5)}&ndash;{b.classEndTime.slice(0, 5)}
+                </p>
+                <p className="text-[11px] text-emerald-700 font-medium mt-1">View students &rarr;</p>
+              </button>
+              <button
+                onClick={() => showQr(b.id)}
+                className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                QR code
+              </button>
             </div>
           ))}
         </div>
+      )}
+
+      {qrBatchId && (
+        <BottomSheet
+          title={batches.find((b) => b.id === qrBatchId)?.name ?? 'Join QR code'}
+          onClose={() => setQrBatchId(null)}
+        >
+          <p className="text-sm text-slate-500">Students scan this to ask to join. You approve each request.</p>
+          {qrLink ? (
+            <div className="mt-4 flex flex-col items-center gap-3">
+              <div className="rounded-2xl border border-slate-200 p-4 bg-white">
+                <QRCodeSVG value={`${window.location.origin}${qrLink.registrationPath}`} size={220} />
+              </div>
+              <input
+                readOnly aria-label="Registration link"
+                value={`${window.location.origin}${qrLink.registrationPath}`}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500"
+                onFocus={(e) => e.currentTarget.select()}
+              />
+              <button
+                onClick={() => copyLink(`${window.location.origin}${qrLink.registrationPath}`)}
+                className="w-full rounded-xl bg-slate-900 py-3 text-sm font-semibold text-white"
+              >
+                {copied ? 'Link copied' : 'Copy link'}
+              </button>
+            </div>
+          ) : (
+            <p className="mt-6 mb-4 text-center text-sm text-slate-400">Loading...</p>
+          )}
+        </BottomSheet>
       )}
 
       <Fab onClick={() => setShowCreateForm(true)} label="New batch" />

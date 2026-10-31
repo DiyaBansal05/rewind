@@ -33,6 +33,62 @@ export interface QueueItem {
   classDate: string
   status: RecordingRequestStatus
   requestedAt: string
+  decidedAt: string | null
+  accessExpiresAt: string | null
+  watchPercent: number
+  openCount: number
+  lastWatchedAt: string | null
+}
+
+export type RequestTab = 'PENDING' | 'APPROVED' | 'ALL'
+export type RequestCounts = Record<RecordingRequestStatus | 'ALL', number>
+
+export interface ViewingSession {
+  openedAt: string
+  success: boolean
+  maxPositionSeconds: number | null
+  lastProgressAt: string | null
+  device: string | null
+}
+
+export interface RequestDetail {
+  summary: QueueItem
+  durationSeconds: number | null
+  watchedSeconds: number
+  lastPositionSeconds: number
+  firstOpenedAt: string | null
+  sessions: ViewingSession[]
+}
+
+export type DecisionOutcome =
+  | 'APPROVED' | 'DENIED' | 'EXTENDED' | 'REVOKED'
+  | 'NOT_FOUND' | 'ALREADY_DECIDED' | 'NOT_ACTIVE' | 'INVALID_CANDIDATE'
+  | 'NO_MATCH' | 'MULTIPLE_CANDIDATES' | 'LOOKUP_NOT_ALLOWED' | 'ERROR'
+
+export interface BulkItemResult {
+  id: string
+  outcome: DecisionOutcome
+  message: string | null
+  candidates: RecordingCandidate[]
+}
+
+export interface AnalyticsReport {
+  days: number
+  from: string
+  to: string
+  totalRequests: number
+  previousPeriodRequests: number
+  approvalRatePercent: number | null
+  medianDecisionMinutes: number | null
+  grantedCount: number
+  watchedCount: number
+  watchedRatePercent: number | null
+  averageWatchPercent: number | null
+  pendingNow: number
+  perDay: { date: string; count: number }[]
+  perBatch: { batchId: string; batchName: string; count: number }[]
+  topRequesters: { studentId: string; name: string; phoneNumber: string; batchNames: string[]; count: number }[]
+  missedWeekdays: { day: DayOfWeek; count: number }[]
 }
 
 export interface RecordingCandidate {
@@ -49,6 +105,12 @@ export interface StudentRecordingRequest {
   classDate: string
   status: RecordingRequestStatus
   requestedAt: string
+  decidedAt: string | null
+  accessExpiresAt: string | null
+  watchUrl: string | null
+  watchPercent: number
+  lastPositionSeconds: number
+  durationSeconds: number | null
 }
 
 export interface EnrolledBatch {
@@ -56,6 +118,9 @@ export interface EnrolledBatch {
   batchName: string
   courseName: string
   status: EnrollmentStatus
+  classDaysOfWeek: DayOfWeek[]
+  classStartTime: string
+  classEndTime: string
 }
 
 export interface EnrollmentRequestItem {

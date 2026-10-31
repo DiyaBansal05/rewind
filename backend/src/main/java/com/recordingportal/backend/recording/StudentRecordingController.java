@@ -9,6 +9,7 @@ import com.recordingportal.backend.student.Student;
 import com.recordingportal.backend.student.StudentRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -29,31 +30,51 @@ public class StudentRecordingController {
     private final BatchRepository batchRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final NotificationService notificationService;
+    private final AccessTokenService accessTokenService;
+    private final RecordingDecisionService decisionService;
 
     public StudentRecordingController(
             RecordingRequestRepository recordingRequestRepository,
             StudentRepository studentRepository,
             BatchRepository batchRepository,
             EnrollmentRepository enrollmentRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            AccessTokenService accessTokenService,
+            RecordingDecisionService decisionService) {
         this.recordingRequestRepository = recordingRequestRepository;
         this.studentRepository = studentRepository;
         this.batchRepository = batchRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.notificationService = notificationService;
+        this.accessTokenService = accessTokenService;
+        this.decisionService = decisionService;
     }
 
     public record CreateRequest(@NotNull UUID batchId, @NotNull LocalDate classDate) {
     }
 
+    /**
+     * watchUrl is only set while the link works, so the dashboard can offer a
+     * "Watch" button without the student digging through notifications.
+     * Links approved before tokens became rebuildable have no watchUrl; the
+     * one in the original notification still works for those.
+     */
     public record RecordingRequestResponse(
             UUID id, UUID batchId, String batchName, LocalDate classDate,
-            RecordingRequestStatus status, java.time.Instant requestedAt) {
-        static RecordingRequestResponse from(RecordingRequest r) {
-            return new RecordingRequestResponse(
-                    r.getId(), r.getBatch().getId(), r.getBatch().getName(),
-                    r.getClassDate(), r.getStatus(), r.getRequestedAt());
-        }
+            RecordingRequestStatus status, Instant requestedAt, Instant decidedAt,
+            Instant accessExpiresAt, String watchUrl, int watchPercent,
+            int lastPositionSeconds, Integer durationSeconds) {
+    }
+
+    private RecordingRequestResponse toResponse(RecordingRequest r) {
+        boolean live = r.getStatus() == RecordingRequestStatus.APPROVED
+                && r.getAccessExpiresAt() != null && r.getAccessExpiresAt().isAfter(Instant.now());
+        String watchUrl = live ? accessTokenService.rebuildToken(r).map(decisionService::accessUrl).orElse(null) : null;
+        return new RecordingRequestResponse(
+                r.getId(), r.getBatch().getId(), r.getBatch().getName(), r.getClassDate(),
+                live || r.getStatus() != RecordingRequestStatus.APPROVED ? r.getStatus() : RecordingRequestStatus.EXPIRED,
+                r.getRequestedAt(), r.getDecidedAt(), r.getAccessExpiresAt(), watchUrl,
+                WatchCoverage.percent(r.getWatchedSegments()), r.getLastPositionSeconds(), r.getDurationSeconds());
     }
 
     @PostMapping
@@ -74,14 +95,14 @@ public class StudentRecordingController {
 
         notificationService.notifyAdminRequestRaised(recordingRequest);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(RecordingRequestResponse.from(recordingRequest));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(recordingRequest));
     }
 
     @GetMapping
     public List<RecordingRequestResponse> history(java.security.Principal principal) {
         UUID studentId = UUID.fromString(principal.getName());
         return recordingRequestRepository.findByStudentIdOrderByRequestedAtDesc(studentId).stream()
-                .map(RecordingRequestResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 }

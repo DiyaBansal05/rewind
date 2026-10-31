@@ -1,6 +1,8 @@
 package com.recordingportal.backend.enrollment;
 
 import java.security.Principal;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,9 +19,14 @@ public class StudentEnrollmentController {
         this.enrollmentRepository = enrollmentRepository;
     }
 
-    public record EnrolledBatch(UUID batchId, String batchName, String courseName, EnrollmentStatus status) {
+    /** Class schedule is included so the request form can offer only days the batch actually meets. */
+    public record EnrolledBatch(
+            UUID batchId, String batchName, String courseName, EnrollmentStatus status,
+            List<DayOfWeek> classDaysOfWeek, LocalTime classStartTime, LocalTime classEndTime) {
         static EnrolledBatch from(Enrollment e) {
-            return new EnrolledBatch(e.getBatch().getId(), e.getBatch().getName(), e.getBatch().getCourseName(), e.getStatus());
+            var b = e.getBatch();
+            return new EnrolledBatch(b.getId(), b.getName(), b.getCourseName(), e.getStatus(),
+                    b.getClassDaysOfWeek().stream().sorted().toList(), b.getClassStartTime(), b.getClassEndTime());
         }
     }
 

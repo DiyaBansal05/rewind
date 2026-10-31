@@ -77,7 +77,7 @@ export function AdminBatchDetailPage() {
                 </div>
                 <button
                   onClick={() => setRemoveTarget(s)}
-                  className="shrink-0 rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                  className="shrink-0 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
                 >
                   Remove
                 </button>
@@ -90,7 +90,9 @@ export function AdminBatchDetailPage() {
       {removeTarget && batch && (
         <ConfirmDialog
           message={<>Are you sure you want to remove <span className="font-semibold">{removeTarget.name}</span> from <span className="font-semibold">{batch.name}</span>?</>}
+          title="Remove student?"
           confirmLabel="Remove"
+          busyLabel="Removing..."
           busy={removing}
           onConfirm={confirmRemove}
           onCancel={() => setRemoveTarget(null)}

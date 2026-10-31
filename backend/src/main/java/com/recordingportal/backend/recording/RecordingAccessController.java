@@ -1,118 +1,139 @@
 package com.recordingportal.backend.recording;
 
+import com.recordingportal.backend.recording.WatchProgressService.LinkState;
+import com.recordingportal.backend.recording.WatchProgressService.ProgressPing;
+import com.recordingportal.backend.recording.WatchProgressService.Resolved;
 import com.recordingportal.backend.zoom.ZoomRecordingLookupService;
 import com.recordingportal.backend.zoom.ZoomRecordingStreamer;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Public redemption endpoints for recording access links. The token in the
  * URL IS the auth for that one resource -- clicked from a WhatsApp message
- * or an admin's approval screen without necessarily an active portal
- * session, so these are standalone routes (not part of the React SPA -- a
- * video/media link shouldn't route through a client-side app framework
- * anyway).
+ * or the student dashboard without necessarily an active portal session, so
+ * these are standalone routes served by the backend, not part of the SPA.
  *
- * Two flavors share the same underlying mechanism (see ZoomRecordingStreamer):
- *  - /r/{token}: a student's approved recording, long-lived (app.access.expiration-hours).
- *  - /r/preview/{token}: an admin previewing a MULTIPLE_CANDIDATES option before
- *    picking which one to approve -- short-lived (see AccessTokenService.PREVIEW_EXPIRATION).
+ *  - GET  /r/{token}           player page (logs one "open" per visit)
+ *  - GET  /r/{token}/video     the video bytes, Range-aware, proxied from Zoom
+ *  - POST /r/{token}/progress  playback progress pings from the player page
+ *  - GET  /r/preview/{token}   admin preview of a MULTIPLE_CANDIDATES option
  *
- * Both fetch a *fresh* download URL from Zoom at redeem-time (never caching
- * Zoom's URL long-term) and proxy-stream the video through this backend --
- * the Zoom bearer token never reaches the client either way.
- *
- * Known simplification: no HTTP Range support yet, so browser seek/scrub on
- * the video player won't be as smooth as native Zoom playback. Fine for now;
- * would be the next thing to add if this becomes the primary way students
- * watch full lectures rather than quick catch-up viewing.
+ * Every request re-checks the link against the database, so revoking or
+ * letting a link expire stops playback on the player's next range request.
+ * The Zoom bearer token never reaches the client.
  */
 @RestController
 public class RecordingAccessController {
 
     private static final Logger log = LoggerFactory.getLogger(RecordingAccessController.class);
 
+    private final WatchProgressService watchProgressService;
     private final AccessTokenService accessTokenService;
-    private final RecordingRequestRepository recordingRequestRepository;
-    private final AccessEventRepository accessEventRepository;
     private final ZoomRecordingLookupService zoomRecordingLookupService;
     private final ZoomRecordingStreamer zoomRecordingStreamer;
+    private final ZoneId zoneId;
+    private final String playerTemplate;
 
     public RecordingAccessController(
+            WatchProgressService watchProgressService,
             AccessTokenService accessTokenService,
-            RecordingRequestRepository recordingRequestRepository,
-            AccessEventRepository accessEventRepository,
             ZoomRecordingLookupService zoomRecordingLookupService,
-            ZoomRecordingStreamer zoomRecordingStreamer) {
+            ZoomRecordingStreamer zoomRecordingStreamer,
+            @Value("${app.institute.timezone}") String timezone) {
+        this.watchProgressService = watchProgressService;
         this.accessTokenService = accessTokenService;
-        this.recordingRequestRepository = recordingRequestRepository;
-        this.accessEventRepository = accessEventRepository;
         this.zoomRecordingLookupService = zoomRecordingLookupService;
         this.zoomRecordingStreamer = zoomRecordingStreamer;
+        this.zoneId = ZoneId.of(timezone);
+        this.playerTemplate = loadTemplate("player.html");
     }
 
     @GetMapping("/r/{token}")
-    public ResponseEntity<?> redeem(@PathVariable String token, HttpServletResponse servletResponse) throws IOException {
-        var recordingRequestId = accessTokenService.parseRecordingRequestId(token);
-        RecordingRequest request = recordingRequestId
-                .flatMap(recordingRequestRepository::findWithDetailsById)
-                .orElse(null);
-
-        if (recordingRequestId.isEmpty()) {
+    public ResponseEntity<String> player(
+            @PathVariable String token,
+            @RequestHeader(value = "User-Agent", required = false) String userAgent) {
+        Resolved resolved = watchProgressService.resolve(token);
+        if (resolved.state() == LinkState.UNKNOWN) {
             return htmlPage(HttpStatus.NOT_FOUND, "Link not found", "This link doesn't look right. Double-check the URL you were sent.");
         }
-
-        String tokenHash = accessTokenService.hash(token);
-        boolean valid = request != null
-                && request.getStatus() == RecordingRequestStatus.APPROVED
-                && tokenHash.equals(request.getAccessTokenHash())
-                && request.getAccessExpiresAt() != null
-                && request.getAccessExpiresAt().isAfter(Instant.now());
-
-        if (request != null) {
-            AccessEvent event = new AccessEvent();
-            event.setRecordingRequest(request);
-            event.setSuccess(valid);
-            accessEventRepository.save(event);
-        }
-
+        boolean valid = resolved.state() == LinkState.VALID;
+        AccessEvent session = watchProgressService.recordOpen(resolved.request(), valid, userAgent);
         if (!valid) {
             return htmlPage(HttpStatus.GONE, "Link expired or revoked",
                     "This recording link is no longer valid. Ask your instructor to approve a new request if you still need it.");
         }
 
+        RecordingRequest r = resolved.request();
+        String title = r.getBatch().getName();
+        String classDate = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", Locale.ENGLISH).format(r.getClassDate());
+        String expires = DateTimeFormatter.ofPattern("d MMM, h:mm a", Locale.ENGLISH).format(r.getAccessExpiresAt().atZone(zoneId));
+        String config = """
+                {"videoUrl":"%s","progressUrl":"%s","sessionId":"%s","resumeAt":%d}"""
+                .formatted("/r/" + token + "/video", "/r/" + token + "/progress", session.getId(), r.getLastPositionSeconds());
+
+        String page = playerTemplate
+                .replace("{{TITLE}}", escape(title))
+                .replace("{{CLASS_DATE}}", escape(classDate))
+                .replace("{{EXPIRES}}", escape(expires))
+                .replace("{{CONFIG}}", config);
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .header("Cache-Control", "no-store")
+                .header("Referrer-Policy", "no-referrer")
+                .body(page);
+    }
+
+    @GetMapping("/r/{token}/video")
+    public void video(
+            @PathVariable String token,
+            @RequestHeader(value = "Range", required = false) String range,
+            HttpServletResponse response) throws IOException {
+        Resolved resolved = watchProgressService.resolve(token);
+        // setStatus rather than sendError: sendError dispatches to /error,
+        // which Spring Security would answer with a 401 for this public route.
+        if (resolved.state() != LinkState.VALID) {
+            response.setStatus(HttpServletResponse.SC_GONE);
+            return;
+        }
+        RecordingRequest r = resolved.request();
         Optional<ZoomRecordingLookupService.RecordingFileCandidate> fresh = Optional.empty();
         try {
-            fresh = zoomRecordingLookupService.getFreshFile(request.getZoomMeetingUuid(), request.getZoomRecordingFileId());
+            fresh = zoomRecordingLookupService.getFreshFileCached(r.getZoomMeetingUuid(), r.getZoomRecordingFileId());
         } catch (Exception e) {
-            log.error("Failed to re-fetch Zoom recording for request {}", request.getId(), e);
+            log.error("Failed to re-fetch Zoom recording for request {}", r.getId(), e);
         }
-
         if (fresh.isEmpty()) {
-            return htmlPage(HttpStatus.SERVICE_UNAVAILABLE, "Recording temporarily unavailable",
-                    "We couldn't reach the recording right now. Try again in a bit, or ask your instructor if the problem persists.");
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            return;
         }
+        zoomRecordingStreamer.stream(fresh.get().downloadUrl(), range, response);
+    }
 
-        // Written directly to the raw servlet response rather than returned via
-        // ResponseEntity<StreamingResponseBody>: Spring's streaming-body return
-        // handler relies on the method's *declared* generic return type, and
-        // this method's other branches return ResponseEntity<String> (HTML error
-        // pages), so the combined signature erases to ResponseEntity<?> --
-        // which Spring failed to recognize as a streaming case at runtime
-        // (fell through to a plain HttpMessageConverter lookup and errored).
-        // Writing to the servlet response directly sidesteps that entirely.
-        zoomRecordingStreamer.stream(fresh.get().downloadUrl(), servletResponse);
-        return null;
+    @PostMapping("/r/{token}/progress")
+    public ResponseEntity<Void> progress(@PathVariable String token, @RequestBody ProgressPing ping) {
+        boolean live = watchProgressService.recordProgress(token, ping);
+        return live ? ResponseEntity.noContent().build() : ResponseEntity.status(HttpStatus.GONE).build();
     }
 
     /**
@@ -123,7 +144,10 @@ public class RecordingAccessController {
      * approval hits an ambiguous match, not saved or shared.
      */
     @GetMapping("/r/preview/{token}")
-    public ResponseEntity<?> preview(@PathVariable String token, HttpServletResponse servletResponse) throws IOException {
+    public ResponseEntity<?> preview(
+            @PathVariable String token,
+            @RequestHeader(value = "Range", required = false) String range,
+            HttpServletResponse servletResponse) throws IOException {
         var claims = accessTokenService.parsePreviewToken(token);
         if (claims.isEmpty()) {
             return htmlPage(HttpStatus.NOT_FOUND, "Link not found", "This preview link doesn't look right or has expired.");
@@ -131,7 +155,7 @@ public class RecordingAccessController {
 
         Optional<ZoomRecordingLookupService.RecordingFileCandidate> fresh;
         try {
-            fresh = zoomRecordingLookupService.getFreshFile(claims.get().meetingUuid(), claims.get().recordingFileId());
+            fresh = zoomRecordingLookupService.getFreshFileCached(claims.get().meetingUuid(), claims.get().recordingFileId());
         } catch (Exception e) {
             log.error("Failed to re-fetch Zoom recording for preview", e);
             fresh = Optional.empty();
@@ -142,7 +166,10 @@ public class RecordingAccessController {
                     "We couldn't reach the recording right now. Try again in a bit.");
         }
 
-        zoomRecordingStreamer.stream(fresh.get().downloadUrl(), servletResponse);
+        // Written straight to the servlet response: this method's other
+        // branches return HTML pages, and a ResponseEntity<?> return type
+        // isn't recognized by Spring as a streaming body.
+        zoomRecordingStreamer.stream(fresh.get().downloadUrl(), range, servletResponse);
         return null;
     }
 
@@ -161,8 +188,8 @@ public class RecordingAccessController {
                 <title>Recording Access</title>
                 <style>
                   body { font-family: system-ui, sans-serif; background: #f8fafc; color: #0f172a;
-                         display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-                  .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 2.5rem;
+                         display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; }
+                  .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 2rem;
                           max-width: 28rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
                   h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
                   p { line-height: 1.5; color: #475569; margin: 0.5rem 0; }
@@ -173,7 +200,15 @@ public class RecordingAccessController {
                 """.formatted(bodyContent);
     }
 
-    private String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    private static String escape(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private static String loadTemplate(String name) {
+        try (InputStream in = new ClassPathResource("player/" + name).getInputStream()) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Missing player template " + name, e);
+        }
     }
 }

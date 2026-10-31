@@ -62,4 +62,17 @@ public class RecordingRequest {
     private String zoomRecordingFileId;
 
     private String zoomMeetingUuid;
+
+    /** Recording length as reported by the player; null until first played. */
+    private Integer durationSeconds;
+
+    /** Coverage bitmap -- see WatchCoverage. */
+    @Column(columnDefinition = "text")
+    private String watchedSegments;
+
+    /** Where playback last was, so the student can resume. */
+    @Column(nullable = false)
+    private int lastPositionSeconds;
+
+    private Instant lastWatchedAt;
 }
