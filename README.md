@@ -13,6 +13,7 @@ A web platform that automates recording access for a small educational institute
 - Access management per recording: extend by 1/3/7 days (the student's link stays the same) or revoke immediately.
 - Watch tracking: the access link opens a small player page that resumes where the student left off and reports which parts of the video actually played, so the admin can see "Watched 68%" rather than just "link opened".
 - Analytics dashboard: requests over time, approval rate, time to decide, how many approved recordings were actually watched, per-batch counts, top requesters, and which class weekdays get missed.
+- Flexible class timetables: each class day can have its own time (e.g. Wed 11 AM, Sat/Sun 10 PM), and the admin can move, cancel or add a class on a single date. Recordings are matched against the time the class actually ran; students just pick the date they missed and never see the change.
 - Mobile-first layout for both admin and student: bottom navigation, bottom sheets for confirmations and forms, 44px tap targets, and a student request flow that only offers days the batch actually meets.
 - An admin-only natural-language chatbot ("how many requests today?", "details of a student?") backed by Claude tool-use over a fixed set of read-only report queries — no free-form text-to-SQL.
 
@@ -37,7 +38,9 @@ NotificationService interface
 ## Core Data Model
 
 - **Admin** — id, email, passwordHash
-- **Batch** — id, name, courseName, startDate, endDate, zoomMeetingId (one shared Zoom account across all batches), classDaysOfWeek, classStartTime, classEndTime, status
+- **Batch** — id, name, courseName, startDate, endDate, zoomMeetingId (one shared Zoom account across all batches), status
+- **Weekly slot** — batchId, dayOfWeek, startTime, endTime (one per class day; end before start = runs past midnight)
+- **Class change** — batchId, classDate, cancelled, startTime, endTime, note (admin's one-off change for a single date: moved, cancelled or extra class)
 - **Student** — id, name, phoneNumber (unique)
 - **Enrollment** — studentId, batchId, enrolledAt (created via QR self-registration; unique per student+batch)
 - **RecordingRequest** — id, studentId, batchId, classDate, status (PENDING/APPROVED/DENIED/REVOKED/EXPIRED), requestedAt, decidedAt, accessTokenHash, accessExpiresAt, zoomRecordingFileId
@@ -58,7 +61,7 @@ public interface NotificationService {
 
 **QR registration:** QR encodes a signed token (HMAC/JJWT over `{batchId, iat}`, backend secret) — not a raw batch ID — so a student can't tamper with the URL to enroll into an arbitrary batch. Batch creation requires class schedule (days of week + start/end time) as required fields, needed for recording resolution below.
 
-**Recording resolution:** All batches share one Zoom meeting ID, so a single day can produce multiple recording files (different batches at different times). On approval, the backend lists Zoom recordings for the account on `classDate`, then matches the file whose `start_time` falls within `[batch.classStartTime - 15min, batch.classEndTime + 15min]`. Zero or multiple matches are surfaced to the admin to pick manually rather than auto-resolved.
+**Recording resolution:** All batches share one Zoom meeting ID, so a single day can produce multiple recording files (different batches at different times). On approval, the backend first works out when that class actually ran (`ClassSchedule`: a class change for that date, else the weekly slot for that weekday, else no class), lists Zoom recordings for the UTC dates covering that local day, then matches the file whose `start_time` falls within `[start, end + 15min]` on the class date. Zero or multiple matches are surfaced to the admin to pick manually rather than auto-resolved.
 
 **Recording access:** On approval, the backend confirms the recording exists via Zoom's S2S OAuth API, then issues its own signed token (JJWT, `sub=recordingRequestId`; only the *hash* is stored). The token has no expiry of its own: `RecordingRequest.accessExpiresAt` in the database is the single source of truth, which is what lets the admin extend access without the link changing, and revoke it with a status flip. Signing is deterministic, so the token can be rebuilt from the request to show a Watch button on the student dashboard.
 

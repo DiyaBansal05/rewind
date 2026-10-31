@@ -8,6 +8,7 @@ import { RefreshButton, Fab } from './shared'
 import { CreateBatchForm } from './CreateBatchForm'
 import { BottomSheet } from '../../components/BottomSheet'
 import { useAdminOutlet } from './adminOutlet'
+import { summarizeSchedule } from '../../lib/schedule'
 
 export function AdminBatchesPage() {
   const navigate = useNavigate()
@@ -131,9 +132,9 @@ export function AdminBatchesPage() {
               <button onClick={() => navigate(`/admin/batches/${b.id}`)} className="min-w-0 text-left flex-1 py-0.5">
                 <p className="text-sm font-semibold text-slate-900 truncate hover:underline">{b.name}</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {b.courseName} &middot; {b.classDaysOfWeek.map((d) => d.slice(0, 3)).join(', ')} &middot; {b.classStartTime.slice(0, 5)}&ndash;{b.classEndTime.slice(0, 5)}
+                  {b.courseName} &middot; {summarizeSchedule(b.weeklySchedule)}
                 </p>
-                <p className="text-[11px] text-emerald-700 font-medium mt-1">View students &rarr;</p>
+                <p className="text-[11px] text-emerald-700 font-medium mt-1">Timetable &amp; students &rarr;</p>
               </button>
               <button
                 onClick={() => showQr(b.id)}

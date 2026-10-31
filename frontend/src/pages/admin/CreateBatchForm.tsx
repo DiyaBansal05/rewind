@@ -1,31 +1,22 @@
 import { useState, type FormEvent } from 'react'
 import { apiFetch } from '../../api/client'
-import { DAYS_OF_WEEK, type DayOfWeek } from '../../api/types'
+import { WeeklyScheduleEditor } from './WeeklyScheduleEditor'
+import { slotsFromDraft, validateDraft, type ScheduleDraft } from '../../lib/scheduleDraft'
 
 export function CreateBatchForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
   const [name, setName] = useState('')
   const [courseName, setCourseName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [days, setDays] = useState<Set<DayOfWeek>>(new Set())
-  const [classStartTime, setClassStartTime] = useState('18:00')
-  const [classEndTime, setClassEndTime] = useState('19:00')
+  const [schedule, setSchedule] = useState<ScheduleDraft>({})
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  function toggleDay(day: DayOfWeek) {
-    setDays((prev) => {
-      const next = new Set(prev)
-      if (next.has(day)) next.delete(day)
-      else next.add(day)
-      return next
-    })
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (days.size === 0) {
-      setError('Pick at least one class day')
+    const problem = validateDraft(schedule)
+    if (problem) {
+      setError(problem)
       return
     }
     setError(null)
@@ -35,9 +26,7 @@ export function CreateBatchForm({ onCreated, onCancel }: { onCreated: () => void
         method: 'POST',
         body: JSON.stringify({
           name, courseName, startDate, endDate,
-          classDaysOfWeek: Array.from(days),
-          classStartTime: `${classStartTime}:00`,
-          classEndTime: `${classEndTime}:00`,
+          weeklySchedule: slotsFromDraft(schedule),
         }),
       })
       onCreated()
@@ -71,27 +60,11 @@ export function CreateBatchForm({ onCreated, onCancel }: { onCreated: () => void
           <label className="block text-xs font-medium text-slate-600">End date</label>
           <input type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600">Class start time</label>
-          <input type="time" required value={classStartTime} onChange={(e) => setClassStartTime(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600">Class end time</label>
-          <input type="time" required value={classEndTime} onChange={(e) => setClassEndTime(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
       </div>
 
-      <label className="mt-3 block text-xs font-medium text-slate-600">Class days</label>
-      <div className="mt-1 flex flex-wrap gap-1.5">
-        {DAYS_OF_WEEK.map((day) => (
-          <button
-            type="button" key={day} onClick={() => toggleDay(day)}
-            className={`rounded-full px-3 py-2 text-xs font-medium ${days.has(day) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
-          >
-            {day.slice(0, 3)}
-          </button>
-        ))}
-      </div>
+      <p className="mt-4 block text-xs font-medium text-slate-600">Class days and times</p>
+      <p className="text-[11px] text-slate-400 mb-2">Tap a day to add it. Each day can have its own time.</p>
+      <WeeklyScheduleEditor value={schedule} onChange={setSchedule} />
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 

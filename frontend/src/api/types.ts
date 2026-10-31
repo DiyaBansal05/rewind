@@ -7,16 +7,33 @@ export const DAYS_OF_WEEK = [
 ] as const
 export type DayOfWeek = (typeof DAYS_OF_WEEK)[number]
 
+/** One weekday's class time ("HH:mm:ss"). endTime before startTime = runs past midnight. */
+export interface WeeklySlot {
+  dayOfWeek: DayOfWeek
+  startTime: string
+  endTime: string
+}
+
 export interface Batch {
   id: string
   name: string
   courseName: string
   startDate: string
   endDate: string
-  classDaysOfWeek: DayOfWeek[]
-  classStartTime: string
-  classEndTime: string
+  weeklySchedule: WeeklySlot[]
   status: BatchStatus
+}
+
+/** An admin's change to one class date. regularStart/End: the usual time that day, if any. */
+export interface ClassChange {
+  id: string
+  classDate: string
+  cancelled: boolean
+  startTime: string | null
+  endTime: string | null
+  note: string | null
+  regularStart: string | null
+  regularEnd: string | null
 }
 
 export interface RegistrationLink {
@@ -118,9 +135,9 @@ export interface EnrolledBatch {
   batchName: string
   courseName: string
   status: EnrollmentStatus
-  classDaysOfWeek: DayOfWeek[]
-  classStartTime: string
-  classEndTime: string
+  classDays: DayOfWeek[]
+  /** Dates the batch actually had class recently (admin changes applied), newest first. */
+  recentClassDates: string[]
 }
 
 export interface EnrollmentRequestItem {
