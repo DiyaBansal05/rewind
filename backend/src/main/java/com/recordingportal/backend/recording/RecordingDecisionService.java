@@ -84,6 +84,38 @@ public class RecordingDecisionService {
         private final Map<String, MatchResult> results = new HashMap<>();
     }
 
+    /**
+     * What approving would match, without approving: lets the admin watch
+     * the recording first. {@code problem} is set (and match may be null)
+     * when there's nothing to show.
+     */
+    public record CheckResult(RecordingRequest request, MatchResult match, Outcome problem, String message) {
+    }
+
+    @Transactional(readOnly = true)
+    public CheckResult check(UUID id) {
+        RecordingRequest request = recordingRequestRepository.findWithDetailsById(id).orElse(null);
+        if (request == null) {
+            return new CheckResult(null, null, Outcome.NOT_FOUND, "Request not found.");
+        }
+        if (request.getStatus() != RecordingRequestStatus.PENDING) {
+            return new CheckResult(request, null, Outcome.ALREADY_DECIDED, "This request was already approved or denied.");
+        }
+        MatchResult matchResult;
+        try {
+            matchResult = match(request, null);
+        } catch (ZoomLookupNotAllowedException e) {
+            return new CheckResult(request, null, Outcome.LOOKUP_NOT_ALLOWED, e.getMessage());
+        } catch (RuntimeException e) {
+            log.error("Zoom lookup failed while checking request {}", id, e);
+            return new CheckResult(request, null, Outcome.ERROR, "Couldn't reach Zoom. Try again in a moment.");
+        }
+        if (matchResult.candidates().isEmpty()) {
+            return new CheckResult(request, matchResult, Outcome.NO_MATCH, describeNoMatch(request, matchResult));
+        }
+        return new CheckResult(request, matchResult, null, null);
+    }
+
     @Transactional
     public Result approve(UUID id, String zoomRecordingFileId, UUID adminId, MatchCache cache) {
         RecordingRequest request = recordingRequestRepository.findWithDetailsById(id).orElse(null);

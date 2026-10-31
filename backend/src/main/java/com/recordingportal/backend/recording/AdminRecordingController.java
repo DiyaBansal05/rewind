@@ -1,5 +1,6 @@
 package com.recordingportal.backend.recording;
 
+import com.recordingportal.backend.batch.ClassSchedule;
 import com.recordingportal.backend.recording.RecordingDecisionService.MatchCache;
 import com.recordingportal.backend.recording.RecordingDecisionService.Outcome;
 import com.recordingportal.backend.recording.RecordingDecisionService.Result;
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.security.Principal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -98,6 +100,16 @@ public class AdminRecordingController {
         }
     }
 
+    /**
+     * The class time used for matching (null if there was no class) and the
+     * recordings that would be offered on approval, each with a short-lived
+     * preview link. problem/message explain an empty result.
+     */
+    public record CheckResponse(
+            UUID id, String batchName, LocalDate classDate, LocalTime classStart, LocalTime classEnd,
+            boolean classTimeChanged, List<CandidateView> candidates, Outcome problem, String message) {
+    }
+
     public record BulkItemResult(UUID id, Outcome outcome, String message, List<CandidateView> candidates) {
     }
 
@@ -162,6 +174,25 @@ public class AdminRecordingController {
                 QueueItem.from(r, opens), r.getDurationSeconds(),
                 WatchCoverage.watchedSeconds(r.getWatchedSegments(), r.getDurationSeconds()),
                 r.getLastPositionSeconds(), firstOpened, sessions));
+    }
+
+    /** Shows the admin which recording approving would share, so they can watch it first. Changes nothing. */
+    @GetMapping("/{id}/check")
+    public ResponseEntity<CheckResponse> check(@PathVariable UUID id) {
+        var result = decisionService.check(id);
+        if (result.problem() == Outcome.NOT_FOUND) {
+            return ResponseEntity.notFound().build();
+        }
+        RecordingRequest r = result.request();
+        var classTime = result.match() == null ? null : result.match().classTime();
+        List<CandidateView> candidates = result.match() == null ? List.of() : result.match().candidates().stream()
+                .map(c -> CandidateView.from(c, accessTokenService, backendBaseUrl))
+                .toList();
+        return ResponseEntity.ok(new CheckResponse(
+                r.getId(), r.getBatch().getName(), r.getClassDate(),
+                classTime == null ? null : classTime.start(), classTime == null ? null : classTime.end(),
+                classTime != null && classTime.source() != ClassSchedule.Source.REGULAR,
+                candidates, result.problem(), result.message()));
     }
 
     @PostMapping("/{id}/approve")

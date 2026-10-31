@@ -9,6 +9,8 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { formatClassDate, timeAgo, timeUntil } from '../../lib/format'
 import { RefreshButton } from './shared'
 import { useAdminOutlet } from './adminOutlet'
+import { CheckRecordingSheet } from './CheckRecordingSheet'
+import { INSTITUTE_TIMEZONE } from '../../constants'
 
 interface DecideErrorBody {
   reason?: DecisionOutcome
@@ -45,6 +47,7 @@ export function AdminRequestsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkSummary, setBulkSummary] = useState<string | null>(null)
+  const [checking, setChecking] = useState<{ id: string; name: string; fileId?: string } | null>(null)
 
   function updateParams(changes: Record<string, string>) {
     const next = new URLSearchParams(params)
@@ -299,9 +302,21 @@ export function AdminRequestsPage() {
               selected={selected.has(item.id)}
               onToggle={() => toggleSelected(item.id)}
               onDecide={(action, fileId) => decide(item.id, action, fileId)}
+              onCheck={(fileId) => setChecking({ id: item.id, name: item.studentName, fileId })}
             />
           ))}
         </ul>
+      )}
+
+      {checking && (
+        <CheckRecordingSheet
+          requestId={checking.id}
+          studentName={checking.name}
+          initialFileId={checking.fileId}
+          onClose={() => setChecking(null)}
+          onApprove={(fileId) => { const id = checking.id; setChecking(null); decide(id, 'approve', fileId) }}
+          onDeny={() => { const id = checking.id; setChecking(null); decide(id, 'deny') }}
+        />
       )}
 
       {/* Bulk action bar: above the bottom nav on phones, pinned at the bottom on desktop */}
@@ -329,7 +344,7 @@ export function AdminRequestsPage() {
 }
 
 function RequestCard({
-  item, busy, error, candidates, selectable, selected, onToggle, onDecide,
+  item, busy, error, candidates, selectable, selected, onToggle, onDecide, onCheck,
 }: {
   item: QueueItem
   busy: boolean
@@ -339,6 +354,7 @@ function RequestCard({
   selected: boolean
   onToggle: () => void
   onDecide: (action: 'approve' | 'deny', zoomRecordingFileId?: string) => void
+  onCheck: (zoomRecordingFileId?: string) => void
 }) {
   const isPending = item.status === 'PENDING'
   const header = (
@@ -377,22 +393,30 @@ function RequestCard({
 
       {isPending && !selectable && (
         candidates ? (
-          <CandidatePicker candidates={candidates} busy={busy} onPick={(fileId) => onDecide('approve', fileId)} onDeny={() => onDecide('deny')} />
+          <CandidatePicker candidates={candidates} busy={busy} onPick={(fileId) => onDecide('approve', fileId)} onDeny={() => onDecide('deny')} onPreview={onCheck} />
         ) : (
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <>
             <button
-              onClick={() => onDecide('approve')} disabled={busy}
-              className="bg-emerald-600 text-white font-medium text-sm rounded-xl py-2.5 active:scale-[0.98] transition disabled:opacity-50"
+              onClick={() => onCheck()} disabled={busy}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 py-2 text-xs font-semibold text-emerald-800 disabled:opacity-50"
             >
-              {busy ? 'Working...' : 'Approve'}
+              <PlaySmallIcon /> Check recording
             </button>
-            <button
-              onClick={() => onDecide('deny')} disabled={busy}
-              className="bg-slate-100 text-slate-700 font-medium text-sm rounded-xl py-2.5 active:scale-[0.98] transition disabled:opacity-50"
-            >
-              Deny
-            </button>
-          </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onDecide('approve')} disabled={busy}
+                className="bg-emerald-600 text-white font-medium text-sm rounded-xl py-2.5 active:scale-[0.98] transition disabled:opacity-50"
+              >
+                {busy ? 'Working...' : 'Approve'}
+              </button>
+              <button
+                onClick={() => onDecide('deny')} disabled={busy}
+                className="bg-slate-100 text-slate-700 font-medium text-sm rounded-xl py-2.5 active:scale-[0.98] transition disabled:opacity-50"
+              >
+                Deny
+              </button>
+            </div>
+          </>
         )
       )}
 
@@ -436,12 +460,13 @@ function AccessChips({ item }: { item: QueueItem }) {
 }
 
 function CandidatePicker({
-  candidates, busy, onPick, onDeny,
+  candidates, busy, onPick, onDeny, onPreview,
 }: {
   candidates: RecordingCandidate[]
   busy: boolean
   onPick: (fileId: string) => void
   onDeny: () => void
+  onPreview: (fileId: string) => void
 }) {
   return (
     <div className="mt-3">
@@ -452,16 +477,16 @@ function CandidatePicker({
             <div className="min-w-0">
               <p className="text-xs font-medium text-slate-800 truncate">{c.meetingTopic}</p>
               <p className="text-[11px] text-slate-500">
-                {new Date(c.startTime).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                {new Date(c.startTime).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: INSTITUTE_TIMEZONE })}
               </p>
             </div>
             <div className="shrink-0 flex items-center gap-1.5">
-              <a
-                href={c.previewUrl} target="_blank" rel="noreferrer"
+              <button
+                onClick={() => onPreview(c.recordingFileId)}
                 className="rounded-lg border border-slate-300 text-slate-700 text-xs font-medium px-2.5 py-2 hover:bg-slate-50"
               >
-                Preview
-              </a>
+                Watch
+              </button>
               <button
                 onClick={() => onPick(c.recordingFileId)} disabled={busy}
                 className="rounded-lg bg-emerald-600 text-white text-xs font-medium px-2.5 py-2 hover:bg-emerald-700 disabled:opacity-50"
@@ -513,6 +538,14 @@ function SearchIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+    </svg>
+  )
+}
+
+function PlaySmallIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <polygon points="6 4 20 12 6 20 6 4" />
     </svg>
   )
 }

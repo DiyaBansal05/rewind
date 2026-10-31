@@ -82,6 +82,20 @@ export type DecisionOutcome =
   | 'NOT_FOUND' | 'ALREADY_DECIDED' | 'NOT_ACTIVE' | 'INVALID_CANDIDATE'
   | 'NO_MATCH' | 'MULTIPLE_CANDIDATES' | 'LOOKUP_NOT_ALLOWED' | 'ERROR'
 
+/** What approving a request would share, so the admin can watch it first. */
+export interface CheckResponse {
+  id: string
+  batchName: string
+  classDate: string
+  classStart: string | null
+  classEnd: string | null
+  /** True when the class ran at a changed time (or was an extra class) that day. */
+  classTimeChanged: boolean
+  candidates: RecordingCandidate[]
+  problem: DecisionOutcome | null
+  message: string | null
+}
+
 export interface BulkItemResult {
   id: string
   outcome: DecisionOutcome
