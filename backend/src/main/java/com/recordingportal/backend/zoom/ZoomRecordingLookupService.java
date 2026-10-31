@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,7 @@ public class ZoomRecordingLookupService {
     private final RestClient restClient;
     private final String userEmail;
     private final long maxLookbackDays;
+    private final ZoneId zoneId;
 
     private static final Duration FRESH_FILE_TTL = Duration.ofMinutes(10);
     private final Map<String, CachedFile> freshFileCache = new ConcurrentHashMap<>();
@@ -39,11 +42,13 @@ public class ZoomRecordingLookupService {
             ZoomOAuthTokenService tokenService,
             @Value("${app.zoom.api-base-url}") String apiBaseUrl,
             @Value("${app.zoom.user-email}") String userEmail,
-            @Value("${app.zoom.max-lookback-days}") long maxLookbackDays) {
+            @Value("${app.zoom.max-lookback-days}") long maxLookbackDays,
+            @Value("${app.institute.timezone}") String timezone) {
         this.tokenService = tokenService;
         this.restClient = RestClient.builder().baseUrl(apiBaseUrl).build();
         this.userEmail = userEmail;
         this.maxLookbackDays = maxLookbackDays;
+        this.zoneId = ZoneId.of(timezone);
     }
 
     public record RecordingFileCandidate(
@@ -52,8 +57,9 @@ public class ZoomRecordingLookupService {
     }
 
     /**
-     * Lists every recording file for the configured Zoom user on exactly
-     * one date -- used to find candidates for a brand-new approval.
+     * Lists every recording file for the configured Zoom user around one
+     * local date (see utcRangeFor) -- used to find candidates for a
+     * brand-new approval.
      * Hard-guarded to a recent rolling window (app.zoom.max-lookback-days,
      * default 7): this account has a lot of real, important recordings, so
      * we deliberately refuse to query anything outside a narrow, recent
@@ -65,12 +71,13 @@ public class ZoomRecordingLookupService {
         assertWithinSafetyWindow(classDate);
 
         String token = tokenService.getAccessToken();
-        log.info("Querying Zoom recordings for {} (user={})", classDate, userEmail);
+        UtcRange range = utcRangeFor(classDate, zoneId);
+        log.info("Querying Zoom recordings for {} (UTC {}..{}, user={})", classDate, range.from(), range.to(), userEmail);
 
         ZoomRecordingsResponse response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/users/{userEmail}/recordings")
-                        .queryParam("from", classDate)
-                        .queryParam("to", classDate)
+                        .queryParam("from", range.from())
+                        .queryParam("to", range.to())
                         .build(userEmail))
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
@@ -124,6 +131,21 @@ public class ZoomRecordingLookupService {
     }
 
     private record CachedFile(RecordingFileCandidate file, Instant fetchedAt) {
+    }
+
+    record UtcRange(LocalDate from, LocalDate to) {
+    }
+
+    /**
+     * Zoom's from/to filter is in UTC dates, but a class date is a local
+     * date. For India (UTC+5:30) a local day spans two UTC dates, so a class
+     * before 5:30 AM would otherwise be searched on the wrong day. Callers
+     * filter the results back down to the local date.
+     */
+    static UtcRange utcRangeFor(LocalDate localDate, ZoneId zone) {
+        LocalDate from = localDate.atStartOfDay(zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDate();
+        LocalDate to = localDate.plusDays(1).atStartOfDay(zone).minusNanos(1).withZoneSameInstant(ZoneOffset.UTC).toLocalDate();
+        return new UtcRange(from, to);
     }
 
     private List<RecordingFileCandidate> toCandidates(ZoomRecordingsResponse response) {

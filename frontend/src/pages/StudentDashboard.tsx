@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch, clearAuth } from '../api/client'
-import type { DayOfWeek, EnrolledBatch, NotificationItem, StudentRecordingRequest } from '../api/types'
+import type { EnrolledBatch, NotificationItem, StudentRecordingRequest } from '../api/types'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { BottomSheet } from '../components/BottomSheet'
 import { StatusBadge } from '../components/StatusBadge'
 import { INSTITUTE_NAME } from '../constants'
 import { formatClassDate, formatClock, formatDateTime, formatShortDate, timeAgo, timeUntil, toIsoDate } from '../lib/format'
+import { formatDays } from '../lib/schedule'
 
 const SEEN_KEY = 'rp_notifications_seen_at'
-const JS_DAY_NAMES: DayOfWeek[] = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
 
 /**
  * Notification messages have an absolute backend URL embedded (see
@@ -280,7 +280,7 @@ function RequestSheet({
   const [error, setError] = useState<string | null>(null)
 
   const batch = batches.find((b) => b.batchId === batchId)
-  const recentClasses = useMemo(() => (batch ? recentClassDates(batch, 6) : []), [batch])
+  const recentClasses = batch?.recentClassDates ?? []
   const duplicate = history.find((h) => h.batchId === batchId && h.classDate === classDate && (h.status === 'PENDING' || h.status === 'APPROVED'))
 
   function pickBatch(id: string) {
@@ -379,30 +379,9 @@ function RequestSheet({
   )
 }
 
-/** The last `count` dates (today included, if class has started) on which this batch had class. */
-function recentClassDates(batch: EnrolledBatch, count: number): string[] {
-  if (batch.classDaysOfWeek.length === 0) return []
-  const days = new Set(batch.classDaysOfWeek)
-  const now = new Date()
-  const [startH, startM] = batch.classStartTime.split(':').map(Number)
-  const result: string[] = []
-  for (let offset = 0; offset < 60 && result.length < count; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset)
-    if (!days.has(JS_DAY_NAMES[d.getDay()])) continue
-    if (offset === 0 && (now.getHours() < startH || (now.getHours() === startH && now.getMinutes() < startM))) continue
-    result.push(toIsoDate(d))
-  }
-  return result
-}
-
+/** Students only see which days the batch meets; times (and any one-off changes) stay with the admin. */
 function describeSchedule(b: EnrolledBatch): string {
-  const days = b.classDaysOfWeek.map((d) => d.charAt(0) + d.slice(1, 3).toLowerCase()).join(', ')
-  return `${days} · ${formatTime(b.classStartTime)}–${formatTime(b.classEndTime)}`
-}
-
-function formatTime(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number)
-  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return b.classDays.length > 0 ? `Classes on ${formatDays(b.classDays)}` : b.courseName
 }
 
 function splitDate(isoDate: string): [string, string, string] {

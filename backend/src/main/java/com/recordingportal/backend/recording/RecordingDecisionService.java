@@ -2,6 +2,7 @@ package com.recordingportal.backend.recording;
 
 import com.recordingportal.backend.admin.Admin;
 import com.recordingportal.backend.admin.AdminRepository;
+import com.recordingportal.backend.batch.ClassSchedule;
 import com.recordingportal.backend.notification.NotificationService;
 import com.recordingportal.backend.zoom.ZoomLookupNotAllowedException;
 import com.recordingportal.backend.zoom.ZoomRecordingLookupService.RecordingFileCandidate;
@@ -9,8 +10,10 @@ import com.recordingportal.backend.zoom.ZoomRecordingMatcher;
 import com.recordingportal.backend.zoom.ZoomRecordingMatcher.MatchResult;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -111,8 +114,7 @@ public class RecordingDecisionService {
                 return Result.of(id, Outcome.INVALID_CANDIDATE, "That recording is no longer a match for this class.");
             }
         } else if (matchResult.candidates().isEmpty()) {
-            return Result.of(id, Outcome.NO_MATCH, "No matching Zoom recording found for this class date/time. "
-                    + "The class may not have been recorded, or processing isn't complete yet.");
+            return Result.of(id, Outcome.NO_MATCH, describeNoMatch(request, matchResult));
         } else if (!matchResult.isUnambiguous()) {
             return new Result(id, Outcome.MULTIPLE_CANDIDATES,
                     "More than one recording matches this class time. Pick the right one.",
@@ -198,6 +200,23 @@ public class RecordingDecisionService {
         request.setStatus(RecordingRequestStatus.REVOKED);
         recordingRequestRepository.save(request);
         return new Result(id, Outcome.REVOKED, null, List.of(), request);
+    }
+
+    /** Tells the admin why nothing matched and, where it applies, how to fix it. */
+    static String describeNoMatch(RecordingRequest request, MatchResult matchResult) {
+        String batch = request.getBatch().getName();
+        String date = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH).format(request.getClassDate());
+        String fixHint = " If the class time was different that day, change it under Batches → " + batch
+                + " → Class time changes, then approve again.";
+        if (matchResult.classTime() == null) {
+            return matchResult.noClassReason() == ClassSchedule.NoClassReason.CANCELLED
+                    ? batch + "'s class on " + date + " is marked as cancelled, so there's no recording to share."
+                    : batch + " doesn't normally have class on " + date + "." + fixHint;
+        }
+        DateTimeFormatter time = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+        return "No Zoom recording started between " + time.format(matchResult.classTime().start()) + " and "
+                + time.format(matchResult.classTime().end()) + " on " + date + ". The class may not have been "
+                + "recorded, or Zoom is still processing it." + fixHint;
     }
 
     public String accessUrl(String rawToken) {
