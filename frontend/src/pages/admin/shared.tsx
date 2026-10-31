@@ -5,7 +5,7 @@ export function Fab({ onClick, label }: { onClick: () => void; label: string }) 
   return (
     <button
       onClick={onClick} aria-label={label}
-      className="md:hidden fixed bottom-24 right-6 w-14 h-14 rounded-full bg-slate-900 text-white shadow-lg flex items-center justify-center text-2xl active:scale-95 transition z-20"
+      className="md:hidden fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-5 w-14 h-14 rounded-full bg-slate-900 text-white shadow-lg flex items-center justify-center text-2xl active:scale-95 transition z-20"
     >
       +
     </button>

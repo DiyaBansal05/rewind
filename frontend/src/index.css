@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  :focus-visible {
+    outline: 2px solid #059669;
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .sheet-in { animation: sheet-in 0.22s ease-out; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* iOS zooms the whole page when a focused field's text is under 16px.
+   Unlayered on purpose so it beats Tailwind's text-sm utilities on phones. */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px;
+  }
+}
+
+@keyframes sheet-in {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in { animation: none; }
+}

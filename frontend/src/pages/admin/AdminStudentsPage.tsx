@@ -61,11 +61,11 @@ export function AdminStudentsPage() {
           <input
             type="text" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)}
             placeholder="Search by name or phone..."
-            className="flex-1 min-w-[10rem] rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            className="flex-1 min-w-[10rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:border-slate-400"
           />
           <select
             value={studentBatchFilter} onChange={(e) => setStudentBatchFilter(e.target.value)}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
           >
             <option value="ALL">All batches</option>
             {batches.map((b) => (
@@ -82,8 +82,8 @@ export function AdminStudentsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {filteredStudents.map((s) => (
-            <div key={s.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
-              <button onClick={() => toggleStudent(s.id)} className="flex w-full items-center justify-between gap-2 text-left">
+            <div key={s.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3.5">
+              <button onClick={() => toggleStudent(s.id)} aria-expanded={expandedStudentId === s.id} className="flex w-full items-center justify-between gap-2 text-left py-0.5">
                 <p className="text-sm truncate">
                   <span className="font-semibold">{s.name}</span>{' '}
                   <span className="text-slate-400 text-xs">{s.phoneNumber}</span>

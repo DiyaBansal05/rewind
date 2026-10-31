@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import type { AdminOutletContext } from './adminOutlet'
 import { apiFetch, clearAuth } from '../../api/client'
-import type { EnrollmentRequestItem, QueueItem } from '../../api/types'
+import type { EnrollmentRequestItem, RequestCounts } from '../../api/types'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { INSTITUTE_NAME, ADMIN_DISPLAY_NAME } from '../../constants'
 
 const NAV_ITEMS = [
   { to: '/admin/requests', label: 'Requests', icon: RequestsIcon },
+  { to: '/admin/analytics', label: 'Analytics', icon: AnalyticsIcon },
   { to: '/admin/batches', label: 'Batches', icon: BatchesIcon },
   { to: '/admin/students', label: 'Students', icon: StudentsIcon },
 ]
@@ -21,10 +23,12 @@ export function AdminLayout() {
     '/admin/batches': pendingJoinCount,
   }
 
-  useAutoRefresh(() => {
-    apiFetch<QueueItem[]>('/api/admin/recording-requests').then((q) => setPendingCount(q.length)).catch(() => {})
+  function refreshBadges() {
+    apiFetch<RequestCounts>('/api/admin/recording-requests/counts').then((c) => setPendingCount(c.PENDING)).catch(() => {})
     apiFetch<EnrollmentRequestItem[]>('/api/admin/enrollment-requests').then((q) => setPendingJoinCount(q.length)).catch(() => {})
-  })
+  }
+
+  useAutoRefresh(refreshBadges)
 
   function logout() {
     clearAuth()
@@ -35,18 +39,18 @@ export function AdminLayout() {
     <div className="min-h-screen bg-slate-50">
       {/* Header -- full-bleed background, content constrained inside it */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200">
-        <div className="mx-auto max-w-6xl px-4 md:px-8 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">{INSTITUTE_NAME}</h1>
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base md:text-lg font-bold text-slate-900 truncate">{INSTITUTE_NAME}</h1>
             <p className="text-xs text-slate-400">Welcome, {ADMIN_DISPLAY_NAME}</p>
           </div>
-          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Sign out</button>
+          <button onClick={logout} className="shrink-0 -mr-2 px-2 py-2 text-sm text-slate-500 hover:text-slate-800">Sign out</button>
         </div>
       </div>
 
       {/* Desktop top tabs */}
       <div className="hidden md:block mx-auto max-w-6xl px-4 md:px-8 pt-4">
-        <div className="bg-slate-200/60 rounded-xl p-1 grid grid-cols-3 text-sm font-medium max-w-lg">
+        <div className="bg-slate-200/60 rounded-xl p-1 grid grid-cols-4 text-sm font-medium max-w-xl">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to} to={item.to}
@@ -66,17 +70,17 @@ export function AdminLayout() {
       </div>
 
       {/* Page content */}
-      <div className="mx-auto max-w-6xl px-4 md:px-8 py-4 pb-24 md:pb-8">
-        <Outlet />
+      <div className="mx-auto max-w-6xl px-4 md:px-8 py-4 pb-28 md:pb-8">
+        <Outlet context={{ refreshBadges } satisfies AdminOutletContext} />
       </div>
 
       {/* Mobile bottom tab bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-20">
-        <div className="mx-auto max-w-6xl grid grid-cols-3">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 pb-safe">
+        <div className="mx-auto max-w-6xl grid grid-cols-4">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to} to={item.to}
-              className={({ isActive }) => `flex flex-col items-center gap-1 py-3 ${isActive ? 'text-slate-900' : 'text-slate-400'}`}
+              className={({ isActive }) => `flex flex-col items-center gap-1 pt-2.5 pb-2 ${isActive ? 'text-slate-900' : 'text-slate-400'}`}
             >
               <div className="relative">
                 <item.icon />
@@ -99,6 +103,13 @@ function RequestsIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  )
+}
+function AnalyticsIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" />
     </svg>
   )
 }

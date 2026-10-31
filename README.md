@@ -9,6 +9,11 @@ A web platform that automates recording access for a small educational institute
 - The admin gets a one-tap approval queue instead of digging through Zoom manually.
 - On approval, the backend resolves the correct Zoom cloud recording (matched by the batch's class time window, since all batches share one Zoom account) and issues a time-limited, revocable access link.
 - Per-student recording-request history, so the admin can see who requests most often.
+- Admin request queue with Pending / Approved / All tabs, search (name, phone, batch), batch and class-date filters, and bulk approve/deny.
+- Access management per recording: extend by 1/3/7 days (the student's link stays the same) or revoke immediately.
+- Watch tracking: the access link opens a small player page that resumes where the student left off and reports which parts of the video actually played, so the admin can see "Watched 68%" rather than just "link opened".
+- Analytics dashboard: requests over time, approval rate, time to decide, how many approved recordings were actually watched, per-batch counts, top requesters, and which class weekdays get missed.
+- Mobile-first layout for both admin and student: bottom navigation, bottom sheets for confirmations and forms, 44px tap targets, and a student request flow that only offers days the batch actually meets.
 - An admin-only natural-language chatbot ("how many requests today?", "details of a student?") backed by Claude tool-use over a fixed set of read-only report queries — no free-form text-to-SQL.
 
 ## Architecture
@@ -36,7 +41,8 @@ NotificationService interface
 - **Student** — id, name, phoneNumber (unique)
 - **Enrollment** — studentId, batchId, enrolledAt (created via QR self-registration; unique per student+batch)
 - **RecordingRequest** — id, studentId, batchId, classDate, status (PENDING/APPROVED/DENIED/REVOKED/EXPIRED), requestedAt, decidedAt, accessTokenHash, accessExpiresAt, zoomRecordingFileId
-- **AccessEvent** — recordingRequestId, accessedAt, success (audit trail; feeds "who requests most" analytics)
+- **AccessEvent** — recordingRequestId, accessedAt, success, maxPositionSeconds, lastProgressAt, userAgent (one row per opening of the player page; feeds the admin's viewing timeline)
+- **RecordingRequest watch fields** — durationSeconds, watchedSegments (coverage bitmap, one char per 10s), lastPositionSeconds, lastWatchedAt
 - **ChatbotQueryLog** — adminId, userQuestion, toolsInvoked (JSON), finalAnswer, createdAt
 - **NotificationLog** — recipientType, recipientId, channel, payloadSummary, sentAt, deliveryStatus
 
@@ -54,7 +60,9 @@ public interface NotificationService {
 
 **Recording resolution:** All batches share one Zoom meeting ID, so a single day can produce multiple recording files (different batches at different times). On approval, the backend lists Zoom recordings for the account on `classDate`, then matches the file whose `start_time` falls within `[batch.classStartTime - 15min, batch.classEndTime + 15min]`. Zero or multiple matches are surfaced to the admin to pick manually rather than auto-resolved.
 
-**Recording access:** On approval, the backend confirms the recording exists via Zoom's S2S OAuth API, then issues its own signed, time-limited opaque token (JJWT, `sub=recordingRequestId`, `exp`=+48–72h; only the *hash* is stored). Redemption endpoint (`GET /r/{token}`) validates the token, fetches a fresh Zoom `download_url` at redeem-time, and proxy-streams the video through the Spring backend — Zoom's bearer token never reaches the client, and revocation is just a status flip. Same signed-URL pattern used industry-wide (S3 pre-signed URLs).
+**Recording access:** On approval, the backend confirms the recording exists via Zoom's S2S OAuth API, then issues its own signed token (JJWT, `sub=recordingRequestId`; only the *hash* is stored). The token has no expiry of its own: `RecordingRequest.accessExpiresAt` in the database is the single source of truth, which is what lets the admin extend access without the link changing, and revoke it with a status flip. Signing is deterministic, so the token can be rebuilt from the request to show a Watch button on the student dashboard.
+
+`GET /r/{token}` serves a small player page (logs one AccessEvent per visit); the video itself comes from `GET /r/{token}/video`, which fetches a fresh Zoom `download_url` (cached for 10 minutes) and proxy-streams it with HTTP Range passthrough so seeking and resuming work. The player posts the browser's `video.played` ranges to `POST /r/{token}/progress` every 15s and on pause/close; they're merged into a coverage bitmap, so skipping to the end doesn't count as watching. Every request re-checks the link, so a revoked or expired link stops playback on the next range request. Zoom's bearer token never reaches the client.
 
 Zoom setup: **Internal App → Server-to-Server OAuth** app in the Zoom Marketplace. Classic scopes `recording:read:admin` / `recording:write:admin`.
 
