@@ -3,6 +3,7 @@ package com.recordingportal.backend.batch;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,8 +13,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.DayOfWeek;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -46,17 +45,11 @@ public class Batch {
 
     private String zoomMeetingId;
 
-    @ElementCollection(fetch = jakarta.persistence.FetchType.EAGER)
-    @CollectionTable(name = "batch_class_days", joinColumns = @JoinColumn(name = "batch_id"))
-    @Enumerated(EnumType.STRING)
-    @Column(name = "day_of_week", nullable = false)
-    private Set<DayOfWeek> classDaysOfWeek = new HashSet<>();
-
-    @Column(nullable = false)
-    private LocalTime classStartTime;
-
-    @Column(nullable = false)
-    private LocalTime classEndTime;
+    /** The regular weekly timetable, at most one class per weekday. Single-date
+     *  changes live in ClassChange; see ClassSchedule for how they combine. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "batch_weekly_slot", joinColumns = @JoinColumn(name = "batch_id"))
+    private Set<WeeklySlot> weeklySchedule = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
