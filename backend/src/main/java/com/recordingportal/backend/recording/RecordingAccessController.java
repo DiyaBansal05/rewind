@@ -110,8 +110,10 @@ public class RecordingAccessController {
             @RequestHeader(value = "Range", required = false) String range,
             HttpServletResponse response) throws IOException {
         Resolved resolved = watchProgressService.resolve(token);
+        // setStatus rather than sendError: sendError dispatches to /error,
+        // which Spring Security would answer with a 401 for this public route.
         if (resolved.state() != LinkState.VALID) {
-            response.sendError(HttpServletResponse.SC_GONE);
+            response.setStatus(HttpServletResponse.SC_GONE);
             return;
         }
         RecordingRequest r = resolved.request();
@@ -122,7 +124,7 @@ public class RecordingAccessController {
             log.error("Failed to re-fetch Zoom recording for request {}", r.getId(), e);
         }
         if (fresh.isEmpty()) {
-            response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return;
         }
         zoomRecordingStreamer.stream(fresh.get().downloadUrl(), range, response);

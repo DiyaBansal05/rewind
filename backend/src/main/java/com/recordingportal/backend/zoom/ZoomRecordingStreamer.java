@@ -66,7 +66,7 @@ public class ZoomRecordingStreamer {
         if (status != 200 && status != 206) {
             log.error("Zoom download returned status {}", status);
             zoomResponse.body().close();
-            servletResponse.sendError(HttpServletResponse.SC_BAD_GATEWAY);
+            servletResponse.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
             return;
         }
 

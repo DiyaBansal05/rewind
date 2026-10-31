@@ -74,6 +74,9 @@
 
   function sendProgress() {
     if (ended || !isFinite(video.duration) || video.duration <= 0) return;
+    // Nothing played in this visit yet (e.g. only the automatic resume seek):
+    // don't report, or merely opening the page would look like watching.
+    if (video.played.length === 0) return;
     var body = JSON.stringify({
       sessionId: config.sessionId,
       position: video.currentTime,
