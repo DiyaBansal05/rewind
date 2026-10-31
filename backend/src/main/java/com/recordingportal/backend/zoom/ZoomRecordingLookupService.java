@@ -3,11 +3,14 @@ package com.recordingportal.backend.zoom;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +31,9 @@ public class ZoomRecordingLookupService {
     private final RestClient restClient;
     private final String userEmail;
     private final long maxLookbackDays;
+
+    private static final Duration FRESH_FILE_TTL = Duration.ofMinutes(10);
+    private final Map<String, CachedFile> freshFileCache = new ConcurrentHashMap<>();
 
     public ZoomRecordingLookupService(
             ZoomOAuthTokenService tokenService,
@@ -98,6 +104,26 @@ public class ZoomRecordingLookupService {
                 .findFirst()
                 .map(f -> new RecordingFileCandidate(
                         meeting.uuid(), meeting.topic(), f.id(), f.fileType(), f.recordingStart(), f.downloadUrl()));
+    }
+
+    /**
+     * Like getFreshFile, but reuses a result for a few minutes. A video
+     * player issues many HTTP Range requests while someone watches and
+     * seeks; without this, each one would cost a Zoom API call.
+     */
+    public Optional<RecordingFileCandidate> getFreshFileCached(String meetingUuid, String recordingFileId) {
+        String key = meetingUuid + "|" + recordingFileId;
+        CachedFile cached = freshFileCache.get(key);
+        if (cached != null && cached.fetchedAt().plus(FRESH_FILE_TTL).isAfter(Instant.now())) {
+            return Optional.of(cached.file());
+        }
+        Optional<RecordingFileCandidate> fresh = getFreshFile(meetingUuid, recordingFileId);
+        if (freshFileCache.size() > 500) freshFileCache.clear();
+        fresh.ifPresent(f -> freshFileCache.put(key, new CachedFile(f, Instant.now())));
+        return fresh;
+    }
+
+    private record CachedFile(RecordingFileCandidate file, Instant fetchedAt) {
     }
 
     private List<RecordingFileCandidate> toCandidates(ZoomRecordingsResponse response) {

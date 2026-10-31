@@ -34,4 +34,11 @@ public class AccessEvent {
 
     @Column(nullable = false)
     private boolean success;
+
+    /** Furthest point reached during this viewing session (progress pings). */
+    private Integer maxPositionSeconds;
+
+    private Instant lastProgressAt;
+
+    private String userAgent;
 }

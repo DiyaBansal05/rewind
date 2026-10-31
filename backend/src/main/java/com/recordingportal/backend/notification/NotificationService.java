@@ -11,6 +11,10 @@ public interface NotificationService {
     /** Lets a student know their requested recording is ready. */
     void notifyStudentRecordingApproved(RecordingRequest request, String accessUrl);
 
+    /** Lets a student know the admin gave them more time to watch. accessUrl may be
+     *  null for links that can't be rebuilt -- the original link still works. */
+    void notifyStudentAccessExtended(RecordingRequest request, String accessUrl);
+
     /** Pings the admin the moment a student scans a QR code and asks to join a batch. */
     void notifyAdminEnrollmentRequested(Enrollment enrollment);
 
