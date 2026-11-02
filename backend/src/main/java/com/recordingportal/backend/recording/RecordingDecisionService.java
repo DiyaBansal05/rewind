@@ -3,6 +3,9 @@ package com.recordingportal.backend.recording;
 import com.recordingportal.backend.admin.Admin;
 import com.recordingportal.backend.admin.AdminRepository;
 import com.recordingportal.backend.batch.ClassSchedule;
+import com.recordingportal.backend.enrollment.Enrollment;
+import com.recordingportal.backend.enrollment.EnrollmentRepository;
+import com.recordingportal.backend.enrollment.EnrollmentStatus;
 import com.recordingportal.backend.notification.NotificationService;
 import com.recordingportal.backend.zoom.ZoomLookupNotAllowedException;
 import com.recordingportal.backend.zoom.ZoomRecordingLookupService.RecordingFileCandidate;
@@ -40,6 +43,7 @@ public class RecordingDecisionService {
     private final AccessTokenService accessTokenService;
     private final NotificationService notificationService;
     private final ZoomRecordingMatcher zoomRecordingMatcher;
+    private final EnrollmentRepository enrollmentRepository;
     private final String backendBaseUrl;
 
     public RecordingDecisionService(
@@ -48,18 +52,20 @@ public class RecordingDecisionService {
             AccessTokenService accessTokenService,
             NotificationService notificationService,
             ZoomRecordingMatcher zoomRecordingMatcher,
+            EnrollmentRepository enrollmentRepository,
             @Value("${app.backend-base-url}") String backendBaseUrl) {
         this.recordingRequestRepository = recordingRequestRepository;
         this.adminRepository = adminRepository;
         this.accessTokenService = accessTokenService;
         this.notificationService = notificationService;
         this.zoomRecordingMatcher = zoomRecordingMatcher;
+        this.enrollmentRepository = enrollmentRepository;
         this.backendBaseUrl = backendBaseUrl;
     }
 
     public enum Outcome {
         APPROVED, DENIED, EXTENDED, REVOKED,
-        NOT_FOUND, ALREADY_DECIDED, NOT_ACTIVE, INVALID_CANDIDATE,
+        NOT_FOUND, ALREADY_DECIDED, NOT_ACTIVE, INVALID_CANDIDATE, NOT_ENROLLED,
         NO_MATCH, MULTIPLE_CANDIDATES, LOOKUP_NOT_ALLOWED, ERROR
     }
 
@@ -101,6 +107,10 @@ public class RecordingDecisionService {
         if (request.getStatus() != RecordingRequestStatus.PENDING) {
             return new CheckResult(request, null, Outcome.ALREADY_DECIDED, "This request was already approved or denied.");
         }
+        String notEnrolled = notEnrolledReason(request);
+        if (notEnrolled != null) {
+            return new CheckResult(request, null, Outcome.NOT_ENROLLED, notEnrolled);
+        }
         MatchResult matchResult;
         try {
             matchResult = match(request, null);
@@ -124,6 +134,13 @@ public class RecordingDecisionService {
         }
         if (request.getStatus() != RecordingRequestStatus.PENDING) {
             return Result.of(id, Outcome.ALREADY_DECIDED, "This request was already approved or denied.");
+        }
+        // A recording only goes to an approved member of the batch, however the
+        // request got here (e.g. the student was removed from the batch after
+        // asking, or joined under an account approved for a different batch).
+        String notEnrolled = notEnrolledReason(request);
+        if (notEnrolled != null) {
+            return Result.of(id, Outcome.NOT_ENROLLED, notEnrolled);
         }
 
         MatchResult matchResult;
@@ -232,6 +249,26 @@ public class RecordingDecisionService {
         request.setStatus(RecordingRequestStatus.REVOKED);
         recordingRequestRepository.save(request);
         return new Result(id, Outcome.REVOKED, null, List.of(), request);
+    }
+
+    /** null if the student is an approved member of the request's batch, otherwise why not. */
+    String notEnrolledReason(RecordingRequest request) {
+        String name = request.getStudent().getName();
+        String batch = request.getBatch().getName();
+        EnrollmentStatus status = enrollmentRepository
+                .findByStudentIdAndBatchId(request.getStudent().getId(), request.getBatch().getId())
+                .map(Enrollment::getStatus)
+                .orElse(null);
+        if (status == EnrollmentStatus.APPROVED) {
+            return null;
+        }
+        if (status == EnrollmentStatus.PENDING) {
+            return name + "'s request to join " + batch + " hasn't been approved yet. Approve them under Batches first, or deny this request.";
+        }
+        if (status == EnrollmentStatus.DENIED) {
+            return name + "'s request to join " + batch + " was turned down, so they can't get its recordings. Deny this request.";
+        }
+        return name + " isn't in " + batch + " any more, so they can't get its recordings. Deny this request.";
     }
 
     /** Tells the admin why nothing matched and, where it applies, how to fix it. */

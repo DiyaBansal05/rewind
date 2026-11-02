@@ -55,6 +55,8 @@ export interface QueueItem {
   watchPercent: number
   openCount: number
   lastWatchedAt: string | null
+  /** The student is currently an approved member of this request's batch. */
+  studentInBatch: boolean
 }
 
 export type RequestTab = 'PENDING' | 'APPROVED' | 'ALL'
@@ -79,7 +81,7 @@ export interface RequestDetail {
 
 export type DecisionOutcome =
   | 'APPROVED' | 'DENIED' | 'EXTENDED' | 'REVOKED'
-  | 'NOT_FOUND' | 'ALREADY_DECIDED' | 'NOT_ACTIVE' | 'INVALID_CANDIDATE'
+  | 'NOT_FOUND' | 'ALREADY_DECIDED' | 'NOT_ACTIVE' | 'INVALID_CANDIDATE' | 'NOT_ENROLLED'
   | 'NO_MATCH' | 'MULTIPLE_CANDIDATES' | 'LOOKUP_NOT_ALLOWED' | 'ERROR'
 
 /** What approving a request would share, so the admin can watch it first. */

@@ -26,6 +26,11 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
             + "where e.batch.id = :batchId and e.status = :status order by e.student.name asc")
     List<Enrollment> findWithStudentByBatchIdAndStatus(UUID batchId, EnrollmentStatus status);
 
+    /** [studentId, batchId] for every approved enrollment of these students. */
+    @Query("select e.student.id, e.batch.id from Enrollment e "
+            + "where e.status = com.recordingportal.backend.enrollment.EnrollmentStatus.APPROVED and e.student.id in :studentIds")
+    List<Object[]> findApprovedPairs(java.util.Collection<UUID> studentIds);
+
     @Query("select e from Enrollment e join fetch e.batch join fetch e.student where e.id = :id")
     Optional<Enrollment> findWithDetailsById(UUID id);
 }
