@@ -17,7 +17,7 @@ export function ConfirmDialog({
 }) {
   return (
     <BottomSheet title={title} onClose={onCancel}>
-      <p className="text-sm text-slate-600">{message}</p>
+      <div className="text-sm text-slate-600">{message}</div>
       <div className="mt-5 grid grid-cols-2 gap-2">
         <button
           onClick={onCancel}

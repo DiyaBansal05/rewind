@@ -27,6 +27,10 @@ public interface RecordingRequestRepository extends JpaRepository<RecordingReque
 
     long countByStatus(RecordingRequestStatus status);
 
+    long countByBatchId(UUID batchId);
+
+    long countByBatchIdAndStatus(UUID batchId, RecordingRequestStatus status);
+
     @Query("select r from RecordingRequest r join fetch r.batch join fetch r.student order by r.requestedAt desc")
     List<RecordingRequest> findAllWithDetails();
 

@@ -13,6 +13,8 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
     List<Enrollment> findByStudentId(UUID studentId);
 
+    long countByBatchIdAndStatus(UUID batchId, EnrollmentStatus status);
+
     Optional<Enrollment> findByStudentIdAndBatchId(UUID studentId, UUID batchId);
 
     @Query("select e from Enrollment e join fetch e.batch where e.student.id = :studentId")

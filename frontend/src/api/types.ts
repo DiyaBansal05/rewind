@@ -24,6 +24,15 @@ export interface Batch {
   status: BatchStatus
 }
 
+/** What deleting a batch would remove, shown in the confirmation. */
+export interface DeleteSummary {
+  batchName: string
+  students: number
+  pendingJoinRequests: number
+  recordingRequests: number
+  activeRecordingLinks: number
+}
+
 /** An admin's change to one class date. regularStart/End: the usual time that day, if any. */
 export interface ClassChange {
   id: string
