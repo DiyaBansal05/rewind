@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiFetch, ApiError } from '../../api/client'
-import type { Batch, ClassChange, EnrolledStudent } from '../../api/types'
+import type { Batch, ClassChange, DeleteSummary, EnrolledStudent } from '../../api/types'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { BottomSheet } from '../../components/BottomSheet'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { formatClassDate, toIsoDate } from '../../lib/format'
 import { DAY_LONG, DAY_SHORT, dayOfWeekOf, formatTimeRange, toInputTime } from '../../lib/schedule'
 import { RefreshButton } from './shared'
+import { useAdminOutlet } from './adminOutlet'
 import { WeeklyScheduleEditor } from './WeeklyScheduleEditor'
 import { draftFromSlots, slotsFromDraft, validateDraft, type ScheduleDraft } from '../../lib/scheduleDraft'
 
@@ -25,6 +26,10 @@ export function AdminBatchDetailPage() {
   const [editingChange, setEditingChange] = useState<ClassChange | null>(null)
   const [deleteChange, setDeleteChange] = useState<ClassChange | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteBatchSummary, setDeleteBatchSummary] = useState<DeleteSummary | 'loading' | null>(null)
+  const [deletingBatch, setDeletingBatch] = useState(false)
+  const [deleteBatchError, setDeleteBatchError] = useState<string | null>(null)
+  const { refreshBadges } = useAdminOutlet()
 
   function refresh() {
     if (!batchId) return
@@ -44,6 +49,31 @@ export function AdminBatchDetailPage() {
       setRemoveTarget(null)
     } finally {
       setRemoving(false)
+    }
+  }
+
+  async function openDeleteBatch() {
+    setDeleteBatchError(null)
+    setDeleteBatchSummary('loading')
+    try {
+      setDeleteBatchSummary(await apiFetch<DeleteSummary>(`/api/admin/batches/${batchId}/delete-summary`))
+    } catch {
+      setDeleteBatchSummary(null)
+      setDeleteBatchError("Couldn't check what's in this batch. Try again.")
+    }
+  }
+
+  async function confirmDeleteBatch() {
+    setDeletingBatch(true)
+    try {
+      await apiFetch(`/api/admin/batches/${batchId}`, { method: 'DELETE' })
+      refreshBadges()
+      navigate('/admin/batches', { replace: true })
+    } catch {
+      setDeleteBatchSummary(null)
+      setDeleteBatchError("Couldn't delete the batch. Try again.")
+    } finally {
+      setDeletingBatch(false)
     }
   }
 
@@ -160,6 +190,35 @@ export function AdminBatchDetailPage() {
         )}
       </div>
 
+      {batch && (
+        <section className="mt-8 rounded-xl border border-red-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Delete this batch</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Removes the batch with its students, join requests, recording requests and class time changes. This can't be undone.
+          </p>
+          <button
+            onClick={openDeleteBatch} disabled={deleteBatchSummary === 'loading'}
+            className="mt-3 w-full rounded-xl border border-red-300 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleteBatchSummary === 'loading' ? 'Checking...' : 'Delete batch'}
+          </button>
+          {deleteBatchError && <p className="mt-2 text-xs text-red-600">{deleteBatchError}</p>}
+        </section>
+      )}
+
+      {deleteBatchSummary && deleteBatchSummary !== 'loading' && (
+        <ConfirmDialog
+          title={`Delete ${deleteBatchSummary.batchName}?`}
+          message={<DeleteBatchMessage summary={deleteBatchSummary} />}
+          confirmLabel="Delete batch"
+          busyLabel="Deleting..."
+          cancelLabel="Keep batch"
+          busy={deletingBatch}
+          onConfirm={confirmDeleteBatch}
+          onCancel={() => setDeleteBatchSummary(null)}
+        />
+      )}
+
       {sheet === 'timetable' && batch && (
         <TimetableSheet
           batch={batch}
@@ -203,6 +262,28 @@ export function AdminBatchDetailPage() {
       )}
     </div>
   )
+}
+
+function DeleteBatchMessage({ summary }: { summary: DeleteSummary }) {
+  const lines = [
+    plural(summary.students, 'student', 'students') + ' will be removed from it',
+    summary.pendingJoinRequests > 0 && plural(summary.pendingJoinRequests, 'pending join request', 'pending join requests') + ' will be dropped',
+    summary.recordingRequests > 0 && plural(summary.recordingRequests, 'recording request', 'recording requests') + ' and their viewing history will be deleted',
+    summary.activeRecordingLinks > 0 && plural(summary.activeRecordingLinks, 'active recording link stops', 'active recording links stop') + ' working',
+  ].filter(Boolean) as string[]
+  return (
+    <>
+      This permanently deletes the batch, its timetable and class time changes.
+      <ul className="mt-2 list-disc pl-5 space-y-0.5">
+        {lines.map((l) => <li key={l}>{l}</li>)}
+      </ul>
+      <span className="mt-2 block font-medium text-slate-800">This can't be undone.</span>
+    </>
+  )
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
 }
 
 function ChangeList({ title, items, muted, onEdit, onDelete }: {

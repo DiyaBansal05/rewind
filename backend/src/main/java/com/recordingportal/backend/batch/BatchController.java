@@ -3,6 +3,8 @@ package com.recordingportal.backend.batch;
 import com.recordingportal.backend.enrollment.Enrollment;
 import com.recordingportal.backend.enrollment.EnrollmentRepository;
 import com.recordingportal.backend.enrollment.EnrollmentStatus;
+import com.recordingportal.backend.recording.RecordingRequestRepository;
+import com.recordingportal.backend.recording.RecordingRequestStatus;
 import com.recordingportal.backend.registration.QrTokenService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -41,6 +43,7 @@ public class BatchController {
     private final QrTokenService qrTokenService;
     private final EnrollmentRepository enrollmentRepository;
     private final ClassChangeRepository classChangeRepository;
+    private final RecordingRequestRepository recordingRequestRepository;
     private final ZoneId zoneId;
 
     public BatchController(
@@ -48,11 +51,13 @@ public class BatchController {
             QrTokenService qrTokenService,
             EnrollmentRepository enrollmentRepository,
             ClassChangeRepository classChangeRepository,
+            RecordingRequestRepository recordingRequestRepository,
             @Value("${app.institute.timezone}") String timezone) {
         this.batchRepository = batchRepository;
         this.qrTokenService = qrTokenService;
         this.enrollmentRepository = enrollmentRepository;
         this.classChangeRepository = classChangeRepository;
+        this.recordingRequestRepository = recordingRequestRepository;
         this.zoneId = ZoneId.of(timezone);
     }
 
@@ -199,6 +204,39 @@ public class BatchController {
                     return ResponseEntity.noContent().<Void>build();
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** What deleting the batch would remove, so the admin can confirm knowingly. */
+    public record DeleteSummary(
+            String batchName, long students, long pendingJoinRequests, long recordingRequests, long activeRecordingLinks) {
+    }
+
+    @GetMapping("/{id}/delete-summary")
+    public ResponseEntity<DeleteSummary> deleteSummary(@PathVariable UUID id) {
+        return batchRepository.findById(id)
+                .map(b -> ResponseEntity.ok(new DeleteSummary(
+                        b.getName(),
+                        enrollmentRepository.countByBatchIdAndStatus(id, EnrollmentStatus.APPROVED),
+                        enrollmentRepository.countByBatchIdAndStatus(id, EnrollmentStatus.PENDING),
+                        recordingRequestRepository.countByBatchId(id),
+                        recordingRequestRepository.countByBatchIdAndStatus(id, RecordingRequestStatus.APPROVED))))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Permanently deletes the batch. The database removes everything tied to
+     * it (on delete cascade): enrollments and join requests, recording
+     * requests and their viewing history, the timetable and class changes.
+     * Active recording links stop working because their request is gone.
+     */
+    @DeleteMapping("/{id}")
+    @Transactional
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        if (!batchRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        batchRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 
     /** null if fine, otherwise a message the admin can act on. */
