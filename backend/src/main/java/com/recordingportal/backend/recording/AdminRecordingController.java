@@ -1,6 +1,8 @@
 package com.recordingportal.backend.recording;
 
 import com.recordingportal.backend.batch.ClassSchedule;
+import com.recordingportal.backend.enrollment.EnrollmentRepository;
+import com.recordingportal.backend.enrollment.EnrollmentStatus;
 import com.recordingportal.backend.recording.RecordingDecisionService.MatchCache;
 import com.recordingportal.backend.recording.RecordingDecisionService.Outcome;
 import com.recordingportal.backend.recording.RecordingDecisionService.Result;
@@ -15,11 +17,13 @@ import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +51,7 @@ public class AdminRecordingController {
     private final AccessEventRepository accessEventRepository;
     private final RecordingDecisionService decisionService;
     private final AccessTokenService accessTokenService;
+    private final EnrollmentRepository enrollmentRepository;
     private final String backendBaseUrl;
 
     public AdminRecordingController(
@@ -54,24 +59,28 @@ public class AdminRecordingController {
             AccessEventRepository accessEventRepository,
             RecordingDecisionService decisionService,
             AccessTokenService accessTokenService,
+            EnrollmentRepository enrollmentRepository,
             @Value("${app.backend-base-url}") String backendBaseUrl) {
         this.recordingRequestRepository = recordingRequestRepository;
         this.accessEventRepository = accessEventRepository;
         this.decisionService = decisionService;
         this.accessTokenService = accessTokenService;
+        this.enrollmentRepository = enrollmentRepository;
         this.backendBaseUrl = backendBaseUrl;
     }
 
     public record QueueItem(
             UUID id, String studentName, String studentPhone, UUID batchId, String batchName,
             LocalDate classDate, RecordingRequestStatus status, Instant requestedAt,
-            Instant decidedAt, Instant accessExpiresAt, int watchPercent, long openCount, Instant lastWatchedAt) {
-        static QueueItem from(RecordingRequest r, long openCount) {
+            Instant decidedAt, Instant accessExpiresAt, int watchPercent, long openCount, Instant lastWatchedAt,
+            boolean studentInBatch) {
+        /** studentInBatch: the student is currently an approved member of the request's batch. */
+        static QueueItem from(RecordingRequest r, long openCount, boolean studentInBatch) {
             return new QueueItem(
                     r.getId(), r.getStudent().getName(), r.getStudent().getPhoneNumber(),
                     r.getBatch().getId(), r.getBatch().getName(), r.getClassDate(),
                     r.getStatus(), r.getRequestedAt(), r.getDecidedAt(), r.getAccessExpiresAt(),
-                    WatchCoverage.percent(r.getWatchedSegments()), openCount, r.getLastWatchedAt());
+                    WatchCoverage.percent(r.getWatchedSegments()), openCount, r.getLastWatchedAt(), studentInBatch);
         }
     }
 
@@ -171,7 +180,7 @@ public class AdminRecordingController {
                         e.getLastProgressAt(), DeviceLabel.from(e.getUserAgent())))
                 .toList();
         return ResponseEntity.ok(new RequestDetail(
-                QueueItem.from(r, opens), r.getDurationSeconds(),
+                QueueItem.from(r, opens, inBatch(r)), r.getDurationSeconds(),
                 WatchCoverage.watchedSeconds(r.getWatchedSegments(), r.getDurationSeconds()),
                 r.getLastPositionSeconds(), firstOpened, sessions));
     }
@@ -247,7 +256,7 @@ public class AdminRecordingController {
     private ResponseEntity<?> single(Result result) {
         if (result.ok()) {
             long opens = countOpens(List.of(result.id())).getOrDefault(result.id(), 0L);
-            return ResponseEntity.ok(QueueItem.from(result.request(), opens));
+            return ResponseEntity.ok(QueueItem.from(result.request(), opens, inBatch(result.request())));
         }
         if (result.outcome() == Outcome.NOT_FOUND) {
             return ResponseEntity.notFound().build();
@@ -276,7 +285,22 @@ public class AdminRecordingController {
 
     private List<QueueItem> toQueueItems(List<RecordingRequest> requests) {
         Map<UUID, Long> opens = countOpens(requests.stream().map(RecordingRequest::getId).toList());
-        return requests.stream().map(r -> QueueItem.from(r, opens.getOrDefault(r.getId(), 0L))).toList();
+        Set<String> approved = new HashSet<>();
+        List<UUID> studentIds = requests.stream().map(r -> r.getStudent().getId()).distinct().toList();
+        if (!studentIds.isEmpty()) {
+            for (Object[] row : enrollmentRepository.findApprovedPairs(studentIds)) {
+                approved.add(row[0] + "|" + row[1]);
+            }
+        }
+        return requests.stream()
+                .map(r -> QueueItem.from(r, opens.getOrDefault(r.getId(), 0L),
+                        approved.contains(r.getStudent().getId() + "|" + r.getBatch().getId())))
+                .toList();
+    }
+
+    private boolean inBatch(RecordingRequest r) {
+        return enrollmentRepository.existsByStudentIdAndBatchIdAndStatus(
+                r.getStudent().getId(), r.getBatch().getId(), EnrollmentStatus.APPROVED);
     }
 
     private Map<UUID, Long> countOpens(List<UUID> ids) {

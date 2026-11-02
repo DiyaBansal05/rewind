@@ -2,6 +2,7 @@ package com.recordingportal.backend.recording;
 
 import com.recordingportal.backend.batch.Batch;
 import com.recordingportal.backend.batch.BatchRepository;
+import com.recordingportal.backend.enrollment.Enrollment;
 import com.recordingportal.backend.enrollment.EnrollmentRepository;
 import com.recordingportal.backend.enrollment.EnrollmentStatus;
 import com.recordingportal.backend.notification.NotificationService;
@@ -82,8 +83,14 @@ public class StudentRecordingController {
         UUID studentId = UUID.fromString(principal.getName());
         Student student = studentRepository.findById(studentId).orElseThrow();
 
-        if (!enrollmentRepository.existsByStudentIdAndBatchIdAndStatus(studentId, request.batchId(), EnrollmentStatus.APPROVED)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You're not enrolled in this batch");
+        EnrollmentStatus enrollment = enrollmentRepository.findByStudentIdAndBatchId(studentId, request.batchId())
+                .map(Enrollment::getStatus)
+                .orElse(null);
+        if (enrollment != EnrollmentStatus.APPROVED) {
+            String message = enrollment == EnrollmentStatus.PENDING
+                    ? "Your request to join this batch is still waiting for your instructor's approval."
+                    : "You're not enrolled in this batch.";
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(message);
         }
         Batch batch = batchRepository.findById(request.batchId()).orElseThrow();
 

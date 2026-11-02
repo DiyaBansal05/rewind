@@ -391,7 +391,23 @@ function RequestCard({
         <Link to={`/admin/requests/${item.id}`} className="block">{header}</Link>
       )}
 
-      {isPending && !selectable && (
+      {isPending && !item.studentInBatch && (
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          {item.studentName} isn't an approved member of {item.batchName}, so this recording can't be shared.
+          Approve their join request under Batches first, or deny this request.
+        </p>
+      )}
+
+      {isPending && !selectable && !item.studentInBatch && (
+        <button
+          onClick={() => onDecide('deny')} disabled={busy}
+          className="mt-2 w-full bg-slate-100 text-slate-700 font-medium text-sm rounded-xl py-2.5 disabled:opacity-50"
+        >
+          {busy ? 'Working...' : 'Deny'}
+        </button>
+      )}
+
+      {isPending && !selectable && item.studentInBatch && (
         candidates ? (
           <CandidatePicker candidates={candidates} busy={busy} onPick={(fileId) => onDecide('approve', fileId)} onDeny={() => onDecide('deny')} onPreview={onCheck} />
         ) : (
